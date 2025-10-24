@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Chat Leads Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-box { margin: 20px 0; padding: 20px; border: 2px solid #ccc; border-radius: 8px; }
+        .success { border-color: #28a745; background: #d4edda; }
+        .error { border-color: #dc3545; background: #f8d7da; }
+        .info { border-color: #17a2b8; background: #d1ecf1; }
+        button { padding: 12px 24px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #0056b3; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; }
+        .step { margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Simple Chat Leads Test</h1>
+    <p>This test will verify that chat lead capture works without foreign key constraints.</p>
+    
+    <div class="test-box info">
+        <h3>📋 Test Plan:</h3>
+        <div class="step">1. Create test chat messages</div>
+        <div class="step">2. Call process-chat-lead function</div>
+        <div class="step">3. Verify lead was saved</div>
+        <div class="step">4. Clean up test data</div>
+    </div>
+
+    <div class="test-box">
+        <h3>🚀 Run Complete Test</h3>
+        <button onclick="runCompleteTest()">Run Full Test</button>
+        <div id="testResult"></div>
+    </div>
+
+    <script>
+        const supabase = window.supabase.createClient(
+            'https://fqnzrffsscrhknfzewxd.supabase.co',
+            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZxbnpyZmZzc2NyaGtuZnpld3hkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTY3MjQ4NzIsImV4cCI6MjAzMjMwMDg3Mn0.wHKJykFYRwjTvmNBiQkNSj8KHUWTg29wGGkIYCBBdRg'
+        );
+
+        function log(message, type = 'info') {
+            const element = document.getElementById('testResult');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : 'info';
+            
+            element.innerHTML += `<div class="test-box ${className}">
+                <strong>${timestamp}:</strong> ${message}
+            </div>`;
+            
+            console.log(`${timestamp}: ${message}`);
+            
+            // Scroll to bottom
+            element.scrollTop = element.scrollHeight;
+        }
+
+        async function runCompleteTest() {
+            document.getElementById('testResult').innerHTML = '';
+            
+            try {
+                log('🏁 Starting complete chat leads test...', 'info');
+                
+                // Step 1: Create test session and messages
+                log('📝 Step 1: Creating test chat messages...', 'info');
+                
+                const testSessionId = 'test-simple-' + Date.now();
+                
+                // Create messages (doesn't require sessions table)
+                const testMessages = [
+                    { message: 'Hello, my name is Sarah Johnson', sender_type: 'user' },
+                    { message: 'Hi Sarah! How can I help you today?', sender_type: 'assistant' },
+                    { message: 'My email is sarah.johnson@email.com and I need a suit for my job interview', sender_type: 'user' },
+                    { message: 'Excellent! I\'d be happy to help you with a professional suit.', sender_type: 'assistant' },
+                    { message: 'I need something elegant but not too expensive. What do you recommend?', sender_type: 'user' },
+                    { message: 'I have some great options for you. Let me connect you with our consultant.', sender_type: 'assistant' }
+                ];
+
+                for (const msg of testMessages) {
+                    const { error } = await supabase
+                        .from('chat_messages')
+                        .insert({
+                            session_id: testSessionId,
+                            message: msg.message,
+                            sender_type: msg.sender_type
+                        });
+
+                    if (error) {
+                        log(`❌ Error creating message: ${error.message}`, 'error');
+                        return;
+                    }
+                }
+
+                log(`✅ Created ${testMessages.length} test messages`, 'success');
+
+                // Step 2: Process the chat lead
+                log('🔄 Step 2: Processing chat lead...', 'info');
+                
+                const { data: processResult, error: processError } = await supabase.functions.invoke('process-chat-lead', {
+                    body: { sessionId: testSessionId }
+                });
+
+                if (processError) {
+                    log(`❌ Process error: ${JSON.stringify(processError)}`, 'error');
+                    return;
+                }
+
+                log(`✅ Process result: <pre>${JSON.stringify(processResult, null, 2)}</pre>`, 'success');
+
+                // Step 3: Verify lead was saved
+                log('🔍 Step 3: Checking if lead was saved...', 'info');
+                
+                const { data: leads, error: leadError } = await supabase
+                    .from('chat_leads')
+                    .select('*')
+                    .eq('session_id', testSessionId);
+
+                if (leadError) {
+                    log(`❌ Error checking leads: ${leadError.message}`, 'error');
+                    return;
+                }
+
+                if (leads && leads.length > 0) {
+                    log(`✅ Found ${leads.length} lead(s): <pre>${JSON.stringify(leads, null, 2)}</pre>`, 'success');
+                    
+                    // Check if customer info was extracted
+                    const lead = leads[0];
+                    if (lead.customer_name && lead.customer_email) {
+                        log(`✅ Customer info extracted: ${lead.customer_name} (${lead.customer_email})`, 'success');
+                    } else {
+                        log(`⚠️ Customer info not fully extracted: name=${lead.customer_name}, email=${lead.customer_email}`, 'error');
+                    }
+                } else {
+                    log(`❌ No leads found for session ${testSessionId}`, 'error');
+                }
+
+                // Step 4: Clean up test data
+                log('🧹 Step 4: Cleaning up test data...', 'info');
+                
+                // Delete test messages
+                const { error: deleteMessagesError } = await supabase
+                    .from('chat_messages')
+                    .delete()
+                    .eq('session_id', testSessionId);
+
+                if (deleteMessagesError) {
+                    log(`⚠️ Error deleting test messages: ${deleteMessagesError.message}`, 'error');
+                } else {
+                    log('✅ Test messages deleted', 'success');
+                }
+
+                // Delete test leads
+                const { error: deleteLeadsError } = await supabase
+                    .from('chat_leads')
+                    .delete()
+                    .eq('session_id', testSessionId);
+
+                if (deleteLeadsError) {
+                    log(`⚠️ Error deleting test leads: ${deleteLeadsError.message}`, 'error');
+                } else {
+                    log('✅ Test leads deleted', 'success');
+                }
+
+                log('🎉 Complete test finished successfully!', 'success');
+
+            } catch (error) {
+                log(`💥 Test failed with exception: ${error.message}`, 'error');
+                console.error('Full error:', error);
+            }
+        }
+    </script>
+</body>
+</html> 

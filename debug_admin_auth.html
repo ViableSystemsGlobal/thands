@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Admin Auth</title>
+</head>
+<body>
+    <h1>Admin Authentication Debug</h1>
+    <div id="debug-info"></div>
+    
+    <script>
+        function debugAdminAuth() {
+            const debugDiv = document.getElementById('debug-info');
+            let html = '<h2>Debug Information:</h2>';
+            
+            // Check localStorage
+            const adminToken = localStorage.getItem('admin_auth_token');
+            const adminUser = localStorage.getItem('admin_user');
+            const customerToken = localStorage.getItem('auth_token');
+            const customerUser = localStorage.getItem('user');
+            
+            html += `<p><strong>Admin Token:</strong> ${adminToken ? 'EXISTS' : 'NOT FOUND'}</p>`;
+            html += `<p><strong>Admin User:</strong> ${adminUser ? 'EXISTS' : 'NOT FOUND'}</p>`;
+            html += `<p><strong>Customer Token:</strong> ${customerToken ? 'EXISTS' : 'NOT FOUND'}</p>`;
+            html += `<p><strong>Customer User:</strong> ${customerUser ? 'EXISTS' : 'NOT FOUND'}</p>`;
+            
+            if (adminToken) {
+                html += `<p><strong>Admin Token Preview:</strong> ${adminToken.substring(0, 50)}...</p>`;
+            }
+            
+            if (adminUser) {
+                try {
+                    const user = JSON.parse(adminUser);
+                    html += `<p><strong>Admin User:</strong> ${user.firstName} ${user.lastName} (${user.email}) - Role: ${user.role}</p>`;
+                } catch (e) {
+                    html += `<p><strong>Admin User Parse Error:</strong> ${e.message}</p>`;
+                }
+            }
+            
+            // Test API call
+            if (adminToken) {
+                html += '<h3>Testing API Call:</h3>';
+                fetch('http://localhost:3001/api/products?page=1&limit=5&active=all', {
+                    headers: {
+                        'Authorization': `Bearer ${adminToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    html += `<p><strong>API Response:</strong> ${data.products ? data.products.length : 0} products found</p>`;
+                    if (data.error) {
+                        html += `<p><strong>API Error:</strong> ${data.error}</p>`;
+                    }
+                    debugDiv.innerHTML = html;
+                })
+                .catch(error => {
+                    html += `<p><strong>API Error:</strong> ${error.message}</p>`;
+                    debugDiv.innerHTML = html;
+                });
+            } else {
+                html += '<p><strong>No admin token - cannot test API</strong></p>';
+                debugDiv.innerHTML = html;
+            }
+        }
+        
+        // Run debug on page load
+        debugAdminAuth();
+    </script>
+</body>
+</html>

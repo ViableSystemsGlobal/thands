@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Process Chat Lead</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        button { padding: 10px 20px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 3px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>Test Process Chat Lead Function</h1>
+    
+    <div class="test-section">
+        <h3>Step 1: Create Test Chat Session</h3>
+        <button onclick="createTestSession()">Create Test Chat Session</button>
+        <div id="sessionResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Step 2: Add Test Messages</h3>
+        <button onclick="addTestMessages()">Add Test Messages</button>
+        <div id="messagesResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Step 3: Test Process Chat Lead</h3>
+        <button onclick="testProcessChatLead()">Process Chat Lead</button>
+        <div id="leadResult"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>Step 4: Check Results</h3>
+        <button onclick="checkChatLeads()">Check Chat Leads Table</button>
+        <div id="checkResult"></div>
+    </div>
+
+    <script>
+        const supabase = window.supabase.createClient(
+            'https://fqnzrffsscrhknfzewxd.supabase.co',
+            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZxbnpyZmZzc2NyaGtuZnpld3hkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTY3MjQ4NzIsImV4cCI6MjAzMjMwMDg3Mn0.wHKJykFYRwjTvmNBiQkNSj8KHUWTg29wGGkIYCBBdRg'
+        );
+
+        let testSessionId = null;
+
+        function log(elementId, message, isError = false) {
+            const element = document.getElementById(elementId);
+            const timestamp = new Date().toLocaleTimeString();
+            element.innerHTML = `<div class="${isError ? 'error' : 'success'}">
+                <strong>${timestamp}:</strong> ${message}
+            </div>`;
+            console.log(`${timestamp}: ${message}`);
+        }
+
+        async function createTestSession() {
+            try {
+                testSessionId = 'test-session-' + Date.now();
+                
+                // First, check if chat_sessions table exists and what columns it has
+                const { data: existingSession, error: checkError } = await supabase
+                    .from('chat_sessions')
+                    .select('id')
+                    .limit(1);
+
+                if (checkError) {
+                    log('sessionResult', `ℹ️ Chat sessions table may not exist or be accessible: ${checkError.message}`, false);
+                    log('sessionResult', `✅ Using session ID for testing: ${testSessionId}`, false);
+                    return;
+                }
+
+                // Try to create the session with minimal required fields
+                const sessionData = {
+                    id: testSessionId,
+                    created_at: new Date().toISOString()
+                };
+
+                // Add optional fields if they might exist
+                try {
+                    sessionData.session_id = testSessionId;
+                    sessionData.user_email = 'test-lead@example.com';
+                    sessionData.last_message_at = new Date().toISOString();
+                    sessionData.is_active = true;
+                } catch (e) {
+                    // Optional fields, ignore if they don't exist
+                }
+
+                const { data, error } = await supabase
+                    .from('chat_sessions')
+                    .insert(sessionData)
+                    .select()
+                    .single();
+
+                if (error) {
+                    log('sessionResult', `⚠️ Couldn't create session in DB (${error.message}), but will use ID: ${testSessionId}`, false);
+                    return;
+                }
+
+                log('sessionResult', `✅ Test session created in database: ${testSessionId}`);
+            } catch (err) {
+                log('sessionResult', `ℹ️ Using session ID without DB entry: ${testSessionId}`, false);
+            }
+        }
+
+        async function addTestMessages() {
+            if (!testSessionId) {
+                log('messagesResult', '❌ Please create a test session first', true);
+                return;
+            }
+
+            try {
+                const messages = [
+                    { message: 'Hello, my name is John Doe', sender_type: 'user' },
+                    { message: 'Hello John! How can I help you today?', sender_type: 'assistant' },
+                    { message: 'My email is john.doe@example.com and I\'m looking for a custom suit', sender_type: 'user' },
+                    { message: 'Excellent! I\'d be happy to help you with a custom suit. What occasion is this for?', sender_type: 'assistant' },
+                    { message: 'It\'s for my wedding next month. I want something elegant and timeless.', sender_type: 'user' },
+                    { message: 'Congratulations! A wedding suit is very special. Let me connect you with our bespoke team.', sender_type: 'assistant' }
+                ];
+
+                for (const msg of messages) {
+                    const { error } = await supabase
+                        .from('chat_messages')
+                        .insert({
+                            session_id: testSessionId,
+                            message: msg.message,
+                            sender_type: msg.sender_type
+                        });
+
+                    if (error) {
+                        log('messagesResult', `❌ Error adding message: ${JSON.stringify(error)}`, true);
+                        return;
+                    }
+                }
+
+                log('messagesResult', `✅ Added ${messages.length} test messages to session`);
+            } catch (err) {
+                log('messagesResult', `💥 Exception: ${err.message}`, true);
+            }
+        }
+
+        async function testProcessChatLead() {
+            if (!testSessionId) {
+                log('leadResult', '❌ Please create a test session first', true);
+                return;
+            }
+
+            try {
+                log('leadResult', '🔄 Calling process-chat-lead function...');
+                
+                const { data, error } = await supabase.functions.invoke('process-chat-lead', {
+                    body: { sessionId: testSessionId }
+                });
+
+                if (error) {
+                    log('leadResult', `❌ Function error: ${JSON.stringify(error)}`, true);
+                    return;
+                }
+
+                log('leadResult', `✅ Process chat lead success: <pre>${JSON.stringify(data, null, 2)}</pre>`);
+            } catch (err) {
+                log('leadResult', `💥 Exception: ${err.message}`, true);
+            }
+        }
+
+        async function checkChatLeads() {
+            try {
+                const { data, error } = await supabase
+                    .from('chat_leads')
+                    .select('*')
+                    .order('created_at', { ascending: false })
+                    .limit(10);
+
+                if (error) {
+                    log('checkResult', `❌ Error checking leads: ${JSON.stringify(error)}`, true);
+                    return;
+                }
+
+                if (data.length === 0) {
+                    log('checkResult', '📭 No chat leads found in database');
+                } else {
+                    log('checkResult', `✅ Found ${data.length} chat leads: <pre>${JSON.stringify(data, null, 2)}</pre>`);
+                }
+            } catch (err) {
+                log('checkResult', `💥 Exception: ${err.message}`, true);
+            }
+        }
+    </script>
+</body>
+</html> 

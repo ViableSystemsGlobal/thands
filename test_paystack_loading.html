@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paystack Script Test</title>
+</head>
+<body>
+    <h1>Paystack Script Loading Test</h1>
+    <div id="status">Loading...</div>
+    <div id="logs"></div>
+
+    <script>
+        const logDiv = document.getElementById('logs');
+        const statusDiv = document.getElementById('status');
+        
+        function log(message) {
+            console.log(message);
+            logDiv.innerHTML += '<div>' + message + '</div>';
+        }
+
+        log('🔍 Testing Paystack script loading...');
+        log('🌐 Current URL: ' + window.location.href);
+        log('🔍 User Agent: ' + navigator.userAgent);
+
+        // Test direct script loading
+        const script = document.createElement('script');
+        script.src = 'https://js.paystack.co/v1/inline.js';
+        script.crossOrigin = 'anonymous';
+        script.async = true;
+
+        script.onload = function() {
+            log('✅ Script loaded successfully');
+            log('🔍 Checking for PaystackPop...');
+            
+            setTimeout(() => {
+                if (window.PaystackPop) {
+                    log('✅ PaystackPop is available!');
+                    log('🔧 Type: ' + typeof window.PaystackPop);
+                    statusDiv.innerHTML = '✅ SUCCESS: PaystackPop loaded correctly';
+                    statusDiv.style.color = 'green';
+                } else {
+                    log('❌ PaystackPop not found in window object');
+                    log('🌐 Available window keys: ' + Object.keys(window).filter(key => key.toLowerCase().includes('pay')).join(', '));
+                    statusDiv.innerHTML = '❌ FAILED: PaystackPop not available';
+                    statusDiv.style.color = 'red';
+                }
+            }, 2000);
+        };
+
+        script.onerror = function(error) {
+            log('❌ Script failed to load: ' + error);
+            statusDiv.innerHTML = '❌ FAILED: Script could not load';
+            statusDiv.style.color = 'red';
+        };
+
+        log('📎 Adding script to head...');
+        document.head.appendChild(script);
+
+        // Also test fetch to see if we can reach Paystack
+        fetch('https://js.paystack.co/v1/inline.js', { method: 'HEAD' })
+            .then(response => {
+                log('🌐 Fetch test - Status: ' + response.status);
+                log('🌐 Fetch test - Headers: ' + JSON.stringify([...response.headers.entries()]));
+            })
+            .catch(error => {
+                log('❌ Fetch test failed: ' + error.message);
+            });
+    </script>
+</body>
+</html> 

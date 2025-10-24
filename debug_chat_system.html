@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat System Debug</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        pre {
+            background: #f1f1f1;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+        .command {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-family: monospace;
+        }
+        .step {
+            background: #f7fafc;
+            padding: 15px;
+            border-left: 4px solid #4299e1;
+            margin: 10px 0;
+        }
+        .warning {
+            background: #fef5e7;
+            padding: 15px;
+            border-left: 4px solid #f6ad55;
+            margin: 10px 0;
+        }
+        .success {
+            background: #f0fff4;
+            padding: 15px;
+            border-left: 4px solid #48bb78;
+            margin: 10px 0;
+        }
+        .error {
+            background: #fed7d7;
+            padding: 15px;
+            border-left: 4px solid #f56565;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Chat System Debug Guide</h1>
+        <p>This guide helps you debug the chat leads system step by step.</p>
+        
+        <div class="section">
+            <h3>📋 Step 1: Check Database Tables</h3>
+            <div class="step">
+                <h4>Run this SQL in your Supabase SQL Editor:</h4>
+                <div class="command">
+-- Check if chat_sessions table exists and has data
+SELECT COUNT(*) as session_count FROM chat_sessions;
+SELECT * FROM chat_sessions ORDER BY created_at DESC LIMIT 5;
+
+-- Check if chat_leads table exists and has data  
+SELECT COUNT(*) as lead_count FROM chat_leads;
+SELECT * FROM chat_leads ORDER BY created_at DESC LIMIT 5;
+
+-- Check if chat_messages table exists and has data
+SELECT COUNT(*) as message_count FROM chat_messages;
+SELECT * FROM chat_messages ORDER BY created_at DESC LIMIT 10;
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h3>🧪 Step 2: Test Session Creation</h3>
+            <div class="step">
+                <h4>Create a test session manually:</h4>
+                <div class="command">
+-- Create a test session
+INSERT INTO chat_sessions (session_id, user_email, is_active) 
+VALUES ('test_session_' || extract(epoch from now()), 'test@example.com', true);
+
+-- Check if it was created
+SELECT * FROM chat_sessions WHERE session_id LIKE 'test_session_%';
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h3>💬 Step 3: Test Message Saving</h3>
+            <div class="step">
+                <h4>Add test messages:</h4>
+                <div class="command">
+-- Find your test session ID first
+SELECT session_id FROM chat_sessions WHERE session_id LIKE 'test_session_%' ORDER BY created_at DESC LIMIT 1;
+
+-- Replace 'your_session_id' with the actual session ID from above
+INSERT INTO chat_messages (session_id, message, sender_type) VALUES 
+('your_session_id', 'Hello, I need help with a custom suit', 'user'),
+('your_session_id', 'I can help you with that! What type of suit are you looking for?', 'assistant'),
+('your_session_id', 'Something formal for a wedding', 'user');
+
+-- Check messages were saved
+SELECT * FROM chat_messages WHERE session_id = 'your_session_id';
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h3>🎯 Step 4: Test Edge Function</h3>
+            <div class="step">
+                <h4>Test the process-chat-lead function:</h4>
+                <div class="command">
+-- In your browser console (F12), run this JavaScript:
+fetch('/functions/v1/process-chat-lead', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer YOUR_SUPABASE_ANON_KEY'
+  },
+  body: JSON.stringify({ sessionId: 'your_session_id' })
+})
+.then(response => response.json())
+.then(data => console.log('Edge function result:', data))
+.catch(error => console.error('Edge function error:', error));
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h3>🔧 Step 5: Check Environment Variables</h3>
+            <div class="step">
+                <h4>Verify your environment variables are set:</h4>
+                <div class="command">
+# Check if your .env file exists and contains:
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_OPENAI_API_KEY=your_openai_api_key
+                </div>
+                <div class="warning">
+                    <strong>⚠️ Important:</strong> Make sure you have a <code>.env</code> file in your project root with these variables.
+                </div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h3>🔍 Step 6: Real-World Test</h3>
+            <div class="step">
+                <h4>Test the actual chatbot:</h4>
+                <ol>
+                    <li>Start your development server: <code>npm run dev</code></li>
+                    <li>Open your website in a browser</li>
+                    <li>Click the chat button (should be in bottom-right corner)</li>
+                    <li>Fill out the information form (name, email, phone)</li>
+                    <li>Send a few messages</li>
+                    <li>Close the chat</li>
+                    <li>Check the admin panel: <code>/admin/chat-leads</code></li>
+                </ol>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h3>🐛 Common Issues & Solutions</h3>
+            
+            <div class="error">
+                <h4>❌ Problem: Database tables don't exist</h4>
+                <p><strong>Solution:</strong> Run the migration again in Supabase SQL Editor:</p>
+                <div class="command">
+-- Run this in Supabase SQL Editor
+ALTER TABLE public.chat_sessions 
+ADD COLUMN IF NOT EXISTS user_name VARCHAR(255),
+ADD COLUMN IF NOT EXISTS user_phone VARCHAR(50),
+ADD COLUMN IF NOT EXISTS user_info_collected BOOLEAN DEFAULT false,
+ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+ALTER TABLE public.chat_leads 
+ADD COLUMN IF NOT EXISTS customer_phone VARCHAR(50);
+                </div>
+            </div>
+            
+            <div class="error">
+                <h4>❌ Problem: Edge function not working</h4>
+                <p><strong>Solution:</strong> Check the edge function logs in Supabase Dashboard > Edge Functions</p>
+            </div>
+            
+            <div class="error">
+                <h4>❌ Problem: Chat button not appearing</h4>
+                <p><strong>Solution:</strong> Check browser console for JavaScript errors</p>
+            </div>
+            
+            <div class="error">
+                <h4>❌ Problem: Environment variables not loading</h4>
+                <p><strong>Solution:</strong> Restart your development server after adding .env file</p>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h3>🧹 Step 7: Cleanup Test Data</h3>
+            <div class="step">
+                <h4>Remove test data when done:</h4>
+                <div class="command">
+-- Clean up test sessions and related data
+DELETE FROM chat_leads WHERE session_id LIKE 'test_session_%';
+DELETE FROM chat_messages WHERE session_id LIKE 'test_session_%';
+DELETE FROM chat_sessions WHERE session_id LIKE 'test_session_%';
+                </div>
+            </div>
+        </div>
+        
+        <div class="success">
+            <h4>✅ Success Indicators:</h4>
+            <ul>
+                <li>Chat sessions are being created in the database</li>
+                <li>Messages are being saved to chat_messages table</li>
+                <li>Edge function processes leads successfully</li>
+                <li>Chat leads appear in the admin panel</li>
+                <li>User information is collected and stored</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html> 

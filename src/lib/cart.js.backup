@@ -1,0 +1,145 @@
+import { supabase } from "./supabase";
+
+export const fetchCartItems = async (sessionId) => {
+  if (!sessionId) return [];
+
+  const { data, error } = await supabase
+    .from("cart_items")
+    .select(`
+      *,
+      products (id, name, description, image_url),
+      gift_voucher_types (id, name, amount, description, image_url)
+    `)
+    .eq("session_id", sessionId)
+    .order("added_at", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching cart items:", error);
+    throw error;
+  }
+
+  return data.map(item => ({
+    ...item,
+    name: item.products?.name || item.gift_voucher_types?.name || "Item",
+    image_url: item.products?.image_url || item.gift_voucher_types?.image_url || null,
+    is_gift_voucher: !!item.gift_voucher_type_id
+  }));
+};
+
+export const addToCart = async (sessionId, product, selectedSize, userId, customerId, isGiftVoucher = false) => {
+  if (!sessionId || !product) throw new Error("Session ID and product are required.");
+
+  const price = isGiftVoucher ? product.amount : (selectedSize?.price || product.price);
+  
+  if (price === undefined || price === null) throw new Error("Price is undefined for the item.");
+
+  const existingItemQuery = supabase
+    .from("cart_items")
+    .select(`
+      *,
+      products (id, name, description, image_url),
+      gift_voucher_types (id, name, amount, description, image_url)
+    `)
+    .eq("session_id", sessionId)
+    .eq(isGiftVoucher ? "gift_voucher_type_id" : "product_id", product.id);
+
+  if (!isGiftVoucher && selectedSize) {
+    existingItemQuery.eq("size", selectedSize.size);
+  }
+  
+  const { data: existingItems, error: fetchError } = await existingItemQuery;
+
+  if (fetchError) {
+    console.error("Error checking existing cart item:", fetchError);
+    throw fetchError;
+  }
+  
+  const existingItem = existingItems && existingItems.length > 0 ? existingItems[0] : null;
+
+  if (existingItem) {
+    const newQuantity = existingItem.quantity + 1;
+    const { data: updatedItem, error: updateError } = await supabase
+      .from("cart_items")
+      .update({ quantity: newQuantity, updated_at: new Date().toISOString() })
+      .eq("id", existingItem.id)
+      .select(`
+        *,
+        products (id, name, description, image_url),
+        gift_voucher_types (id, name, amount, description, image_url)
+      `)
+      .single();
+
+    if (updateError) throw updateError;
+    return { 
+        item: {
+          ...updatedItem,
+          name: updatedItem.products?.name || updatedItem.gift_voucher_types?.name || "Item",
+          image_url: updatedItem.products?.image_url || updatedItem.gift_voucher_types?.image_url || null,
+          is_gift_voucher: !!updatedItem.gift_voucher_type_id
+        }, 
+        updatedExisting: true 
+    };
+  } else {
+    const newItemData = {
+      session_id: sessionId,
+      product_id: isGiftVoucher ? null : product.id,
+      gift_voucher_type_id: isGiftVoucher ? product.id : null,
+      quantity: 1,
+      price: price,
+      size: isGiftVoucher ? null : selectedSize?.size,
+      user_id: userId,
+      customer_id: customerId, 
+      added_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data: newItem, error: insertError } = await supabase
+      .from("cart_items")
+      .insert(newItemData)
+      .select(`
+        *,
+        products (id, name, description, image_url),
+        gift_voucher_types (id, name, amount, description, image_url)
+      `)
+      .single();
+
+    if (insertError) throw insertError;
+     return { 
+        item: {
+          ...newItem,
+          name: newItem.products?.name || newItem.gift_voucher_types?.name || "Item",
+          image_url: newItem.products?.image_url || newItem.gift_voucher_types?.image_url || null,
+          is_gift_voucher: !!newItem.gift_voucher_type_id
+        }, 
+        updatedExisting: false 
+    };
+  }
+};
+
+
+export const updateCartQuantity = async (itemId, newQuantity) => {
+  if (!itemId || newQuantity < 1) {
+    throw new Error("Item ID and valid quantity are required.");
+  }
+  const { data, error } = await supabase
+    .from("cart_items")
+    .update({ quantity: newQuantity, updated_at: new Date().toISOString() })
+    .eq("id", itemId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+};
+
+export const removeFromCart = async (itemId) => {
+  if (!itemId) throw new Error("Item ID is required.");
+  const { error } = await supabase.from("cart_items").delete().eq("id", itemId);
+  if (error) throw error;
+};
+
+export const clearCart = async (sessionId) => {
+  if (!sessionId) throw new Error("Session ID is required.");
+  const { error } = await supabase.from("cart_items").delete().eq("session_id", sessionId);
+  if (error) throw error;
+};

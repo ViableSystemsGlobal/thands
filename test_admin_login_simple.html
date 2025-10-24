@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Admin Login Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .success { background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .error { background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .info { background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        input { padding: 8px; margin: 5px; width: 200px; }
+        pre { background-color: #f8f9fa; padding: 10px; border-radius: 5px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>Simple Admin Login Test</h1>
+    
+    <div id="results"></div>
+    
+    <div>
+        <input type="email" id="email" placeholder="Email" value="apsolutions16@gmail.com">
+        <input type="password" id="password" placeholder="Password" value="Miracle4">
+        <button onclick="testLogin()">Test Login</button>
+        <button onclick="clearStorage()">Clear Storage</button>
+        <button onclick="checkStorage()">Check Storage</button>
+    </div>
+
+    <script>
+        function addResult(message, type = 'info') {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.innerHTML = message;
+            results.appendChild(div);
+        }
+
+        function testLogin() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            addResult('<h3>🔑 Testing Admin Login</h3>', 'info');
+            addResult(`<strong>Email:</strong> ${email}`);
+            addResult(`<strong>Password:</strong> ${password ? '***' + password.slice(-2) : 'empty'}`);
+            
+            fetch('http://localhost:3001/api/auth/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email, password })
+            })
+            .then(response => response.json())
+            .then(data => {
+                addResult('<strong>Login Response:</strong><pre>' + JSON.stringify(data, null, 2) + '</pre>');
+                
+                if (data.token && data.user) {
+                    addResult('✅ Login successful!', 'success');
+                    
+                    // Test localStorage access
+                    try {
+                        localStorage.setItem('test_token', data.token);
+                        localStorage.setItem('test_user', JSON.stringify(data.user));
+                        addResult('✅ localStorage access working', 'success');
+                        
+                        // Test reading back
+                        const storedToken = localStorage.getItem('test_token');
+                        const storedUser = localStorage.getItem('test_user');
+                        addResult(`<strong>Stored Token:</strong> ${storedToken ? storedToken.substring(0, 20) + '...' : 'null'}`);
+                        addResult(`<strong>Stored User:</strong> ${storedUser ? JSON.parse(storedUser).role : 'null'}`);
+                        
+                    } catch (storageError) {
+                        addResult(`❌ localStorage error: ${storageError.message}`, 'error');
+                    }
+                } else {
+                    addResult('❌ Login failed', 'error');
+                }
+            })
+            .catch(error => {
+                addResult(`❌ Network Error: ${error.message}`, 'error');
+            });
+        }
+
+        function clearStorage() {
+            try {
+                localStorage.clear();
+                addResult('🗑️ localStorage cleared', 'info');
+            } catch (error) {
+                addResult(`❌ Error clearing storage: ${error.message}`, 'error');
+            }
+        }
+
+        function checkStorage() {
+            try {
+                const keys = Object.keys(localStorage);
+                addResult(`<strong>localStorage Keys:</strong> ${keys.length > 0 ? keys.join(', ') : 'empty'}`, 'info');
+                
+                if (keys.includes('admin_auth_token')) {
+                    const token = localStorage.getItem('admin_auth_token');
+                    addResult(`<strong>Admin Token:</strong> ${token ? token.substring(0, 20) + '...' : 'null'}`);
+                }
+                
+                if (keys.includes('admin_user')) {
+                    const user = localStorage.getItem('admin_user');
+                    addResult(`<strong>Admin User:</strong> ${user ? JSON.parse(user).role : 'null'}`);
+                }
+            } catch (error) {
+                addResult(`❌ Error checking storage: ${error.message}`, 'error');
+            }
+        }
+
+        // Run initial check when page loads
+        window.onload = function() {
+            addResult('<h2>🚀 Simple Admin Login Test</h2>', 'info');
+            addResult('This page tests admin login and localStorage access', 'info');
+            checkStorage();
+        };
+    </script>
+</body>
+</html>

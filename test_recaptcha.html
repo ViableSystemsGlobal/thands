@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>reCAPTCHA Test</title>
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #fafafa;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .recaptcha-container {
+            text-align: center;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 reCAPTCHA Integration Test</h1>
+        
+        <div class="test-section">
+            <h3>Environment Check</h3>
+            <div id="env-status"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>reCAPTCHA Widget Test</h3>
+            <p>This tests if the reCAPTCHA widget loads correctly:</p>
+            <div class="recaptcha-container">
+                <div class="g-recaptcha" data-sitekey="YOUR_SITE_KEY_HERE"></div>
+            </div>
+            <div id="recaptcha-status"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>Integration Test</h3>
+            <p>This simulates what happens in your React app:</p>
+            <button id="test-btn" onclick="testRecaptcha()">Test reCAPTCHA Verification</button>
+            <div id="test-status"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>Quick Setup Guide</h3>
+            <ol>
+                <li>Go to <a href="https://www.google.com/recaptcha/admin/create" target="_blank">Google reCAPTCHA Admin</a></li>
+                <li>Create a new site with reCAPTCHA v2 "I'm not a robot" checkbox</li>
+                <li>Add these domains:
+                    <ul>
+                        <li>localhost</li>
+                        <li>127.0.0.1</li>
+                        <li>your-production-domain.com</li>
+                    </ul>
+                </li>
+                <li>Copy the site key and secret key</li>
+                <li>Add to your .env file:
+                    <pre>VITE_RECAPTCHA_SITE_KEY=your-site-key-here
+RECAPTCHA_SECRET_KEY=your-secret-key-here</pre>
+                </li>
+                <li>Replace "YOUR_SITE_KEY_HERE" in this file with your actual site key</li>
+                <li>Restart your development server</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        // Check environment
+        function checkEnvironment() {
+            const envStatus = document.getElementById('env-status');
+            let html = '';
+            
+            if (typeof window.grecaptcha !== 'undefined') {
+                html += '<div class="status success">✅ reCAPTCHA API loaded successfully</div>';
+            } else {
+                html += '<div class="status error">❌ reCAPTCHA API not loaded</div>';
+            }
+            
+            if (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+                html += '<div class="status success">✅ Running on secure context</div>';
+            } else {
+                html += '<div class="status warning">⚠️ reCAPTCHA works best on HTTPS or localhost</div>';
+            }
+            
+            envStatus.innerHTML = html;
+        }
+
+        // Test reCAPTCHA functionality
+        function testRecaptcha() {
+            const statusDiv = document.getElementById('test-status');
+            const btn = document.getElementById('test-btn');
+            
+            if (typeof window.grecaptcha === 'undefined') {
+                statusDiv.innerHTML = '<div class="status error">❌ reCAPTCHA API not loaded</div>';
+                return;
+            }
+            
+            btn.disabled = true;
+            statusDiv.innerHTML = '<div class="status warning">⏳ Testing reCAPTCHA...</div>';
+            
+            setTimeout(() => {
+                const response = window.grecaptcha.getResponse();
+                if (response && response.length > 0) {
+                    statusDiv.innerHTML = '<div class="status success">✅ reCAPTCHA token received: ' + response.substring(0, 20) + '...</div>';
+                } else {
+                    statusDiv.innerHTML = '<div class="status error">❌ No reCAPTCHA token found. Please complete the reCAPTCHA above.</div>';
+                }
+                btn.disabled = false;
+            }, 1000);
+        }
+
+        // Initialize checks when page loads
+        window.addEventListener('load', () => {
+            setTimeout(checkEnvironment, 500);
+        });
+    </script>
+</body>
+</html> 

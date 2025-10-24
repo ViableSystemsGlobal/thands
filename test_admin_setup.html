@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Setup & Chatbot Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 20px; border: 1px solid #ccc; }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+        button { padding: 10px 20px; margin: 10px 0; cursor: pointer; }
+        input { padding: 10px; margin: 5px; width: 300px; }
+        .results { background: #f5f5f5; padding: 15px; margin: 10px 0; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>Admin Setup & Chatbot Test</h1>
+    
+    <div class="section">
+        <h2>Step 1: Create Admin Account</h2>
+        <p>First, create an admin account to access the admin panel:</p>
+        <input type="email" id="adminEmail" placeholder="Admin Email (e.g., admin@example.com)" />
+        <input type="password" id="adminPassword" placeholder="Admin Password" />
+        <button onclick="createAdmin()">Create Admin Account</button>
+        <div id="adminResult" class="results"></div>
+    </div>
+    
+    <div class="section">
+        <h2>Step 2: Test Chatbot (Create Sample Data)</h2>
+        <p>Test the chatbot to create some sample chat sessions and leads:</p>
+        <button onclick="testChatbot()">Test Chatbot & Create Sample Leads</button>
+        <div id="chatResult" class="results"></div>
+    </div>
+    
+    <div class="section">
+        <h2>Step 3: Check Database</h2>
+        <p>Check if the data was created successfully:</p>
+        <button onclick="checkDatabase()">Check Database</button>
+        <div id="dbResult" class="results"></div>
+    </div>
+    
+    <div class="section">
+        <h2>Step 4: Admin Panel Links</h2>
+        <p>Once you have an admin account and test data:</p>
+        <a href="http://localhost:5173/admin/login" target="_blank">Admin Login</a> | 
+        <a href="http://localhost:5173/admin/chat-leads" target="_blank">Chat Leads</a> | 
+        <a href="http://127.0.0.1:54323" target="_blank">Supabase Studio</a>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'http://127.0.0.1:54321';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
+        
+        function log(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : 'info';
+            element.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+        }
+        
+        async function createAdmin() {
+            const email = document.getElementById('adminEmail').value;
+            const password = document.getElementById('adminPassword').value;
+            
+            if (!email || !password) {
+                log('adminResult', 'Please enter both email and password', 'error');
+                return;
+            }
+            
+            try {
+                log('adminResult', 'Creating admin account...', 'info');
+                
+                // Create user account
+                const signUpResponse = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': SUPABASE_ANON_KEY
+                    },
+                    body: JSON.stringify({
+                        email: email,
+                        password: password,
+                        options: {
+                            data: {
+                                role: 'admin'
+                            }
+                        }
+                    })
+                });
+                
+                const signUpData = await signUpResponse.json();
+                
+                if (signUpData.error) {
+                    log('adminResult', `Sign up error: ${signUpData.error.message}`, 'error');
+                    return;
+                }
+                
+                log('adminResult', `✅ Admin account created successfully!`, 'success');
+                log('adminResult', `User ID: ${signUpData.user.id}`, 'info');
+                log('adminResult', `Email: ${signUpData.user.email}`, 'info');
+                
+                // Create admin profile
+                const profileResponse = await fetch(`${SUPABASE_URL}/rest/v1/profiles`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'apikey': SUPABASE_ANON_KEY,
+                        'Authorization': `Bearer ${signUpData.session.access_token}`
+                    },
+                    body: JSON.stringify({
+                        id: signUpData.user.id,
+                        email: email,
+                        role: 'admin',
+                        full_name: 'Admin User'
+                    })
+                });
+                
+                if (profileResponse.ok) {
+                    log('adminResult', '✅ Admin profile created successfully!', 'success');
+                } else {
+                    const profileError = await profileResponse.json();
+                    log('adminResult', `Profile creation error: ${JSON.stringify(profileError)}`, 'error');
+                }
+                
+                log('adminResult', '🎉 Admin setup complete! You can now login to the admin panel.', 'success');
+                
+            } catch (error) {
+                log('adminResult', `Error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testChatbot() {
+            try {
+                log('chatResult', 'Testing chatbot functionality...', 'info');
+                
+                                 // Create a chat session
+                 const sessionResponse = await fetch(`${SUPABASE_URL}/functions/v1/chat-bot`, {
+                     method: 'POST',
+                     headers: {
+                         'Content-Type': 'application/json',
+                         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                         'apikey': SUPABASE_ANON_KEY
+                     },
+                     body: JSON.stringify({
+                         message: 'Hello, I need help with a custom suit',
+                         sessionId: null,
+                         userEmail: 'test@example.com'
+                     })
+                 });
+                
+                const sessionData = await sessionResponse.json();
+                
+                if (sessionData.error) {
+                    log('chatResult', `Session error: ${sessionData.error}`, 'error');
+                    return;
+                }
+                
+                log('chatResult', '✅ Chat session created successfully!', 'success');
+                
+                // Simulate user info collection
+                const userInfo = {
+                    name: 'John Doe',
+                    email: 'john@example.com',
+                    phone: '+1234567890'
+                };
+                
+                                 // Update session with user info
+                 const updateResponse = await fetch(`${SUPABASE_URL}/rest/v1/chat_sessions?id=eq.${sessionData.sessionId}`, {
+                     method: 'PATCH',
+                     headers: {
+                         'Content-Type': 'application/json',
+                         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                         'apikey': SUPABASE_ANON_KEY
+                     },
+                     body: JSON.stringify({
+                         user_name: userInfo.name,
+                         user_email: userInfo.email,
+                         user_phone: userInfo.phone,
+                         user_info_collected: true
+                     })
+                 });
+                
+                if (updateResponse.ok) {
+                    log('chatResult', '✅ User info updated successfully!', 'success');
+                } else {
+                    log('chatResult', 'Error updating user info', 'error');
+                }
+                
+                                 // Process chat lead
+                 const leadResponse = await fetch(`${SUPABASE_URL}/functions/v1/process-chat-lead`, {
+                     method: 'POST',
+                     headers: {
+                         'Content-Type': 'application/json',
+                         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                         'apikey': SUPABASE_ANON_KEY
+                     },
+                     body: JSON.stringify({
+                         sessionId: sessionData.sessionId
+                     })
+                 });
+                
+                const leadData = await leadResponse.json();
+                
+                if (leadData.error) {
+                    log('chatResult', `Lead processing error: ${leadData.error}`, 'error');
+                } else {
+                    log('chatResult', '✅ Chat lead processed successfully!', 'success');
+                    log('chatResult', `Lead ID: ${leadData.lead?.id}`, 'info');
+                }
+                
+            } catch (error) {
+                log('chatResult', `Error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function checkDatabase() {
+            try {
+                log('dbResult', 'Checking database...', 'info');
+                
+                                 // Check chat_sessions
+                 const sessionsResponse = await fetch(`${SUPABASE_URL}/rest/v1/chat_sessions?select=*`, {
+                     headers: {
+                         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                         'apikey': SUPABASE_ANON_KEY
+                     }
+                 });
+                 const sessions = await sessionsResponse.json();
+                 log('dbResult', `Chat Sessions: ${sessions.length} records`, 'info');
+                 
+                 // Check chat_leads
+                 const leadsResponse = await fetch(`${SUPABASE_URL}/rest/v1/chat_leads?select=*`, {
+                     headers: {
+                         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                         'apikey': SUPABASE_ANON_KEY
+                     }
+                 });
+                 const leads = await leadsResponse.json();
+                 log('dbResult', `Chat Leads: ${leads.length} records`, 'info');
+                 
+                 // Check profiles
+                 const profilesResponse = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=*`, {
+                     headers: {
+                         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+                         'apikey': SUPABASE_ANON_KEY
+                     }
+                 });
+                 const profiles = await profilesResponse.json();
+                 log('dbResult', `Profiles: ${profiles.length} records`, 'info');
+                
+                if (leads.length > 0) {
+                    log('dbResult', '✅ Sample data created successfully!', 'success');
+                    log('dbResult', `First lead: ${JSON.stringify(leads[0], null, 2)}`, 'info');
+                } else {
+                    log('dbResult', '⚠️ No leads found. Try running the chatbot test first.', 'error');
+                }
+                
+            } catch (error) {
+                log('dbResult', `Error: ${error.message}`, 'error');
+            }
+        }
+    </script>
+</body>
+</html> 

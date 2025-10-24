@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Debug - Chat System</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .error {
+            background: #fee;
+            border-color: #fcc;
+            color: #c00;
+        }
+        .success {
+            background: #efe;
+            border-color: #cfc;
+            color: #060;
+        }
+        .warning {
+            background: #ffd;
+            border-color: #ffb;
+            color: #660;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .sql-box {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            margin: 10px 0;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Admin Debug Tool</h1>
+        <p>This tool helps debug the admin panel database connection and data issues.</p>
+        
+        <div class="section">
+            <h3>📋 Step 1: Run Database Checks</h3>
+            <p>Copy and paste these SQL queries into your <strong>Supabase SQL Editor</strong>:</p>
+            
+            <h4>🔍 Check Table Structure:</h4>
+            <div class="sql-box">
+-- Check if chat tables exist and their structure
+SELECT table_name, column_name, data_type, is_nullable
+FROM information_schema.columns 
+WHERE table_name IN ('chat_sessions', 'chat_leads', 'chat_messages')
+ORDER BY table_name, ordinal_position;
+            </div>
+            
+            <h4>📊 Check Data Counts:</h4>
+            <div class="sql-box">
+-- Count records in each table
+SELECT 'chat_sessions' as table_name, COUNT(*) as record_count FROM chat_sessions
+UNION ALL
+SELECT 'chat_leads' as table_name, COUNT(*) as record_count FROM chat_leads  
+UNION ALL
+SELECT 'chat_messages' as table_name, COUNT(*) as record_count FROM chat_messages
+UNION ALL
+SELECT 'chat_rate_limits' as table_name, COUNT(*) as record_count FROM chat_rate_limits
+UNION ALL  
+SELECT 'chat_abuse_reports' as table_name, COUNT(*) as record_count FROM chat_abuse_reports;
+            </div>
+            
+            <h4>🔎 Check Recent Data:</h4>
+            <div class="sql-box">
+-- Check recent chat sessions
+SELECT id, session_id, user_email, user_name, user_phone, user_info_collected, created_at 
+FROM chat_sessions 
+ORDER BY created_at DESC 
+LIMIT 10;
+
+-- Check recent chat leads  
+SELECT id, customer_name, customer_email, customer_phone, status, message_count, created_at
+FROM chat_leads 
+ORDER BY created_at DESC 
+LIMIT 10;
+
+-- Check recent chat messages
+SELECT cm.id, cm.message, cm.sender_type, cm.created_at,
+       cs.user_email, cs.user_name
+FROM chat_messages cm
+LEFT JOIN chat_sessions cs ON cm.session_id = cs.id
+ORDER BY cm.created_at DESC 
+LIMIT 10;
+            </div>
+        </div>
+        
+        <div class="section">
+            <h3>🧪 Step 2: Create Test Data</h3>
+            <p>If the tables are empty, create some test data:</p>
+            
+            <div class="sql-box">
+-- Create test chat session
+INSERT INTO chat_sessions (session_id, user_email, user_name, user_phone, is_active, user_info_collected) 
+VALUES ('test-admin-' || extract(epoch from now()), 'admin-test@example.com', 'Admin Test User', '+1234567890', true, true)
+RETURNING id, session_id;
+
+-- Get the session ID from above and use it below (replace YOUR_SESSION_ID)
+-- Create test messages
+INSERT INTO chat_messages (session_id, message, sender_type) VALUES 
+(
+  (SELECT id FROM chat_sessions WHERE session_id LIKE 'test-admin-%' ORDER BY created_at DESC LIMIT 1),
+  'Hello, I need help with a custom suit for my wedding', 
+  'user'
+),
+(
+  (SELECT id FROM chat_sessions WHERE session_id LIKE 'test-admin-%' ORDER BY created_at DESC LIMIT 1),
+  'I would love to help you find the perfect wedding suit! What style are you looking for?', 
+  'assistant'
+),
+(
+  (SELECT id FROM chat_sessions WHERE session_id LIKE 'test-admin-%' ORDER BY created_at DESC LIMIT 1),
+  'Something classic and elegant, navy blue would be great', 
+  'user'
+);
+
+-- Create test lead manually
+INSERT INTO chat_leads (
+  session_id, 
+  customer_name, 
+  customer_email, 
+  customer_phone, 
+  chat_summary, 
+  message_count, 
+  chat_duration_minutes, 
+  status
+) VALUES (
+  (SELECT id FROM chat_sessions WHERE session_id LIKE 'test-admin-%' ORDER BY created_at DESC LIMIT 1),
+  'Admin Test User',
+  'admin-test@example.com', 
+  '+1234567890',
+  'Customer inquired about a navy blue wedding suit. Interested in classic and elegant styles. High-value lead for custom tailoring services.',
+  3,
+  15,
+  'new'
+);
+            </div>
+        </div>
+        
+        <div class="section">
+            <h3>🔐 Step 3: Check Row Level Security (RLS)</h3>
+            <p>Check if RLS policies are blocking admin access:</p>
+            
+            <div class="sql-box">
+-- Check RLS policies for chat tables
+SELECT schemaname, tablename, policyname, permissive, roles, cmd, qual
+FROM pg_policies 
+WHERE tablename IN ('chat_sessions', 'chat_leads', 'chat_messages', 'chat_rate_limits', 'chat_abuse_reports')
+ORDER BY tablename, policyname;
+
+-- Check if tables have RLS enabled
+SELECT schemaname, tablename, rowsecurity 
+FROM pg_tables 
+WHERE tablename IN ('chat_sessions', 'chat_leads', 'chat_messages', 'chat_rate_limits', 'chat_abuse_reports');
+            </div>
+        </div>
+        
+        <div class="section">
+            <h3>🎯 Step 4: Test Admin Access</h3>
+            <p>Test if admin user can access the data:</p>
+            
+            <div class="sql-box">
+-- Check current user and role
+SELECT 
+  auth.uid() as user_id,
+  auth.email() as user_email,
+  auth.role() as user_role;
+
+-- Check if current user is admin
+SELECT id, email, role 
+FROM profiles 
+WHERE id = auth.uid();
+
+-- Test admin access to chat_leads (this should work for admins)
+SELECT COUNT(*) as accessible_leads
+FROM chat_leads;
+            </div>
+        </div>
+        
+        <div class="section">
+            <h3>⚡ Step 5: Test Edge Functions</h3>
+            <p>Test if the edge functions are working:</p>
+            
+            <div class="sql-box">
+-- Test process-chat-lead function with a test session
+-- First, get a test session ID:
+SELECT id FROM chat_sessions WHERE session_id LIKE 'test-admin-%' LIMIT 1;
+
+-- Then in browser console (F12), run:
+/*
+fetch('/functions/v1/process-chat-lead', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({ 
+    sessionId: 'YOUR_TEST_SESSION_ID_FROM_ABOVE' 
+  })
+})
+.then(response => response.json())
+.then(data => console.log('Edge function result:', data))
+.catch(error => console.error('Edge function error:', error));
+*/
+            </div>
+        </div>
+        
+        <div class="section warning">
+            <h3>⚠️ Common Issues & Solutions</h3>
+            
+            <h4>❌ Issue: Tables don't exist</h4>
+            <p><strong>Solution:</strong> Run the migrations again. The tables might not have been created properly.</p>
+            
+            <h4>❌ Issue: No data in tables</h4>
+            <p><strong>Solution:</strong> The chat system hasn't been used yet, or it's not working properly. Create test data using Step 2.</p>
+            
+            <h4>❌ Issue: RLS blocking access</h4>
+            <p><strong>Solution:</strong> Make sure your admin user has the 'admin' role in the profiles table.</p>
+            
+            <h4>❌ Issue: Admin user not recognized</h4>
+            <p><strong>Solution:</strong> Check that you're logged in as an admin and your profile has role = 'admin'.</p>
+        </div>
+        
+        <div class="section success">
+            <h3>✅ Success Checklist</h3>
+            <ul>
+                <li>All chat tables exist with proper structure</li>
+                <li>Tables contain data (either real or test data)</li>
+                <li>RLS policies allow admin access</li>
+                <li>Admin user has proper role in profiles table</li>
+                <li>Admin pages load without JavaScript errors</li>
+                <li>Edge functions are working (if testing chat flow)</li>
+            </ul>
+        </div>
+        
+        <div class="section">
+            <h3>🧹 Step 6: Cleanup Test Data (Optional)</h3>
+            <p>Remove test data after debugging:</p>
+            
+            <div class="sql-box">
+-- Remove test data  
+DELETE FROM chat_leads WHERE customer_email = 'admin-test@example.com';
+DELETE FROM chat_messages WHERE session_id IN (
+  SELECT id FROM chat_sessions WHERE session_id LIKE 'test-admin-%'
+);
+DELETE FROM chat_sessions WHERE session_id LIKE 'test-admin-%';
+            </div>
+        </div>
+    </div>
+</body>
+</html> 

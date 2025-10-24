@@ -1,0 +1,59 @@
+
+import { supabase } from "@/lib/supabase";
+
+export const fetchWishlistItems = async (sessionId, userId) => { // Added userId for potential filtering
+  let query = supabase
+    .from("wishlist_items")
+    .select(`
+      *,
+      products:product_id (*)
+    `);
+
+  if (userId) {
+    query = query.eq("user_id", userId);
+  } else if (sessionId) {
+    query = query.eq("session_id", sessionId);
+  } else {
+    return []; // No identifier to fetch wishlist
+  }
+  
+  const { data, error } = await query;
+
+  if (error) throw error;
+  return data || [];
+};
+
+export const addWishlistItem = async (sessionId, productId, userId = null, customerId = null) => {
+  const { data, error } = await supabase
+    .from("wishlist_items")
+    .insert({
+      session_id: sessionId,
+      product_id: productId,
+      user_id: userId,
+      customer_id: customerId,
+      saved_at: new Date().toISOString(),
+    })
+    .select(`
+      *,
+      products:product_id (*)
+    `); // Ensure select returns the joined product details
+
+  if (error) {
+    console.error("Error in addWishlistItem:", error);
+    throw error;
+  }
+  return data; // data should be an array with the inserted item
+};
+
+// Renamed from removeWishlistItem to match usage, expects wishlist_item.id
+export const removeWishlistItem = async (itemId) => { 
+  const { error } = await supabase
+    .from("wishlist_items")
+    .delete()
+    .eq("id", itemId); // itemId is the 'id' column of the 'wishlist_items' table
+
+  if (error) {
+    console.error("Error in removeWishlistItem:", error);
+    throw error;
+  }
+};

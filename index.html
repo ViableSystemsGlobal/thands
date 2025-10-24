@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="img-src 'self' data: https: blob: http://localhost:3001 http://127.0.0.1:3001 http://localhost:3003 http://127.0.0.1:3003 ws://localhost:3001 ws://127.0.0.1:3001 ws://localhost:3003 ws://127.0.0.1:3003;" />
+    <title>Tailored Hands - Modern Fashion Brand</title>
+    <meta name="description" content="Discover our collection of handcrafted pieces that blend timeless sophistication with contemporary design." />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <!-- Google reCAPTCHA Script -->
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
+    <!-- Paystack Script with error handling -->
+    <script>
+      window.paystackLoadAttempts = 0;
+      function loadPaystackScript() {
+        window.paystackLoadAttempts++;
+        console.log(`🔄 Loading Paystack script (attempt ${window.paystackLoadAttempts})`);
+        
+        const script = document.createElement('script');
+        script.src = 'https://js.paystack.co/v2/inline.js';
+        script.async = true;
+        
+        script.onload = function() {
+          console.log('✅ Paystack v2 script loaded successfully');
+          if (window.PaystackPop) {
+            console.log('✅ PaystackPop is available');
+          } else {
+            console.warn('⚠️ Script loaded but PaystackPop not available');
+          }
+        };
+        
+        script.onerror = function(error) {
+          console.error('❌ Failed to load Paystack v2 script:', error);
+          // Try v1 URL if v2 fails
+          if (window.paystackLoadAttempts === 1) {
+            console.log('🔄 Trying Paystack v1 URL...');
+            setTimeout(loadPaystackBackup, 1000);
+          }
+        };
+        
+        document.head.appendChild(script);
+      }
+      
+      function loadPaystackBackup() {
+        console.log('🔄 Loading Paystack backup script');
+        const script = document.createElement('script');
+        script.src = 'https://js.paystack.co/v1/inline.js';
+        script.async = true;
+        
+        script.onload = function() {
+          console.log('✅ Paystack v1 backup script loaded');
+          if (window.PaystackPop) {
+            console.log('✅ PaystackPop is available');
+          } else {
+            console.warn('⚠️ Script loaded but PaystackPop not available');
+          }
+        };
+        
+        script.onerror = function() {
+          console.error('❌ Backup Paystack v1 script also failed');
+        };
+        
+        document.head.appendChild(script);
+      }
+      
+      // Load immediately
+      loadPaystackScript();
+    </script>
+    <!-- EmailJS Script for browser-based email sending -->
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

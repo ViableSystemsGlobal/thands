@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Auth Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .success { background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .error { background-color: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        .info { background-color: #d1ecf1; border: 1px solid #bee5eb; color: #0c5460; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        pre { background-color: #f8f9fa; padding: 10px; border-radius: 5px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>Admin Authentication Test</h1>
+    
+    <div id="results"></div>
+    
+    <button onclick="checkAuth()">Check Authentication</button>
+    <button onclick="testApiCall()">Test API Call</button>
+    <button onclick="loginAsAdmin()">Login as Admin</button>
+    <button onclick="clearAuth()">Clear Auth</button>
+
+    <script>
+        function addResult(message, type = 'info') {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.innerHTML = message;
+            results.appendChild(div);
+        }
+
+        function checkAuth() {
+            const results = document.getElementById('results');
+            results.innerHTML = '';
+            
+            addResult('<h3>🔍 Checking Authentication Status</h3>', 'info');
+            
+            // Check for admin token
+            const adminToken = localStorage.getItem('admin_auth_token');
+            addResult(`<strong>Admin Token:</strong> ${adminToken ? '✅ Found' : '❌ Not found'}`);
+            
+            if (adminToken) {
+                addResult(`<strong>Token Preview:</strong> ${adminToken.substring(0, 20)}...`);
+                
+                // Try to decode the token (basic check)
+                try {
+                    const payload = JSON.parse(atob(adminToken.split('.')[1]));
+                    addResult(`<strong>Token Payload:</strong><pre>${JSON.stringify(payload, null, 2)}</pre>`);
+                    
+                    // Check if token is expired
+                    const now = Math.floor(Date.now() / 1000);
+                    if (payload.exp && payload.exp < now) {
+                        addResult('⚠️ Token appears to be expired!', 'error');
+                    } else {
+                        addResult('✅ Token appears to be valid', 'success');
+                    }
+                } catch (e) {
+                    addResult(`❌ Error decoding token: ${e.message}`, 'error');
+                }
+            }
+            
+            // Check for other auth tokens
+            const userToken = localStorage.getItem('auth_token');
+            addResult(`<strong>User Token:</strong> ${userToken ? '✅ Found' : '❌ Not found'}`);
+        }
+
+        async function testApiCall() {
+            addResult('<h3>🧪 Testing API Call</h3>', 'info');
+            
+            const token = localStorage.getItem('admin_auth_token');
+            if (!token) {
+                addResult('❌ No admin token found. Please login first.', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('http://localhost:3001/api/admin/users', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                addResult(`<strong>Response Status:</strong> ${response.status} ${response.statusText}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    addResult('<strong>Response Data:</strong><pre>' + JSON.stringify(data, null, 2) + '</pre>', 'success');
+                } else {
+                    const errorData = await response.text();
+                    addResult(`<strong>Error Response:</strong><pre>${errorData}</pre>`, 'error');
+                }
+            } catch (error) {
+                addResult(`❌ Network Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function loginAsAdmin() {
+            addResult('<h3>🔑 Logging in as Admin</h3>', 'info');
+            
+            try {
+                const response = await fetch('http://localhost:3001/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: 'admin@tailoredhands.africa',
+                        password: 'admin123'
+                    })
+                });
+
+                addResult(`<strong>Login Response Status:</strong> ${response.status} ${response.statusText}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    addResult('<strong>Login Response:</strong><pre>' + JSON.stringify(data, null, 2) + '</pre>');
+                    
+                    if (data.token) {
+                        localStorage.setItem('admin_auth_token', data.token);
+                        addResult('✅ Admin token saved to localStorage', 'success');
+                    } else {
+                        addResult('❌ No token in response', 'error');
+                    }
+                } else {
+                    const errorData = await response.text();
+                    addResult(`<strong>Login Error:</strong><pre>${errorData}</pre>`, 'error');
+                }
+            } catch (error) {
+                addResult(`❌ Login Error: ${error.message}`, 'error');
+            }
+        }
+
+        function clearAuth() {
+            localStorage.removeItem('admin_auth_token');
+            localStorage.removeItem('auth_token');
+            addResult('🗑️ All auth tokens cleared', 'info');
+        }
+
+        // Run initial check when page loads
+        window.onload = function() {
+            addResult('<h2>🚀 Admin Authentication Test Tool</h2>', 'info');
+            addResult('Click "Check Authentication" to see current status', 'info');
+        };
+    </script>
+</body>
+</html>
