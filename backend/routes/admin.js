@@ -16,7 +16,8 @@ router.get('/dashboard', async (req, res) => {
       `SELECT COUNT(*) as total_orders, 
               SUM(CASE WHEN payment_status = 'paid' THEN base_total ELSE 0 END) as total_revenue,
               AVG(CASE WHEN payment_status = 'paid' THEN base_total ELSE NULL END) as avg_order_value,
-              SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_orders
+              SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_orders,
+              SUM(CASE WHEN payment_status = 'pending' THEN 1 ELSE 0 END) as pending_payments
        FROM orders 
        WHERE created_at >= $1 AND created_at <= $2`,
       [startDate, endDate]
@@ -92,6 +93,7 @@ router.get('/dashboard', async (req, res) => {
         avgOrderValue: parseFloat(ordersResult.rows[0]?.avg_order_value || 0),
         totalCustomers: parseInt(customersResult.rows[0]?.total_customers || 0), // Frontend expects totalCustomers
         pendingOrders: parseInt(ordersResult.rows[0]?.pending_orders || 0), // Frontend expects pendingOrders
+        pendingPayments: parseInt(ordersResult.rows[0]?.pending_payments || 0), // New metric for pending payments
         totalProducts: parseInt(productsResult.rows[0]?.total_products || 0),
         // Newsletter metrics
         totalNewsletterSubscribers: parseInt(newsletterResult.rows[0]?.total_subscribers || 0),

@@ -202,7 +202,32 @@ router.post('/', [
       ]
     );
 
-    res.status(201).json(result.rows[0]);
+    const consultation = result.rows[0];
+
+    // Send consultation notification
+    try {
+      const notificationResponse = await fetch(`${process.env.API_BASE_URL || 'http://localhost:3003'}/api/notifications/send/consultation`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${req.headers.authorization || 'admin-token'}`
+        },
+        body: JSON.stringify({
+          consultationId: consultation.id
+        })
+      });
+
+      if (notificationResponse.ok) {
+        console.log('📧 Consultation notification sent');
+      } else {
+        console.error('❌ Failed to send consultation notification');
+      }
+    } catch (notificationError) {
+      console.error('❌ Error sending consultation notification:', notificationError);
+      // Don't fail the consultation creation if notification fails
+    }
+
+    res.status(201).json(consultation);
   } catch (error) {
     console.error('Error creating consultation:', error);
     res.status(500).json({ error: 'Failed to create consultation', details: error.message });

@@ -298,4 +298,35 @@ router.post('/collection', authenticateToken, upload.single('image'), async (req
   }
 });
 
+// Upload newsletter image
+router.post('/newsletter', authenticateToken, upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file provided' });
+    }
+
+    // Process the image
+    const processedImage = await processImage(
+      req.file.buffer,
+      req.file.originalname,
+      'newsletter'
+    );
+
+    console.log('Newsletter upload - processedImage:', JSON.stringify(processedImage, null, 2));
+    const baseUrl = `http://localhost:${process.env.PORT || 3003}`;
+    res.json({
+      success: true,
+      url: `${baseUrl}${processedImage.processedImages.thumbnails.url}`,
+      imageUrl: `${baseUrl}${processedImage.processedImages.thumbnails.url}`,
+      message: 'Newsletter image uploaded successfully'
+    });
+
+  } catch (error) {
+    console.error('Newsletter image upload error:', error);
+    res.status(500).json({ 
+      error: error.message || 'Upload failed' 
+    });
+  }
+});
+
 module.exports = router;

@@ -12,6 +12,10 @@ const ensureUploadDirs = async () => {
     'uploads/products/original',
     'uploads/products/thumbnails',
     'uploads/products/medium',
+    'uploads/newsletter',
+    'uploads/newsletter/original',
+    'uploads/newsletter/thumbnails',
+    'uploads/newsletter/medium',
     'uploads/temp'
   ];
 
@@ -78,7 +82,7 @@ const processImage = async (buffer, filename, type = 'product') => {
     };
 
     for (const [sizeName, config] of Object.entries(sizes)) {
-      const outputPath = path.join('uploads', 'products', sizeName, `${fileId}-${config.suffix}.webp`);
+      const outputPath = path.join('uploads', type, sizeName, `${fileId}-${config.suffix}.webp`);
       console.log(`Processing ${sizeName} to ${outputPath}`);
       
       let sharpInstance = sharp(buffer);
@@ -100,7 +104,7 @@ const processImage = async (buffer, filename, type = 'product') => {
       
       processedImages[sizeName] = {
         path: outputPath,
-        url: `/uploads/products/${sizeName}/${fileId}-${config.suffix}.webp`,
+        url: `/uploads/${type}/${sizeName}/${fileId}-${config.suffix}.webp`,
         size: sizeName,
         width: config.width,
         height: config.height

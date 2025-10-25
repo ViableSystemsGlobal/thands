@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000', 'http://127.0.0.1:5173'],
+  origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000', 'http://127.0.0.1:5173', 'http://127.0.0.1:5174'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
@@ -24,8 +24,18 @@ app.use(helmet({
   contentSecurityPolicy: false
 }));
 app.use(morgan('combined'));
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Skip JSON parsing for upload routes
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/upload/')) {
+    return next();
+  }
+  express.json({ limit: '10mb' })(req, res, next);
+});
+
+app.use(express.urlencoded({ 
+  extended: true, 
+  limit: '10mb'
+}));
 
 // Serve static files (uploaded images) - without helmet middleware
 app.use('/uploads', (req, res, next) => {
@@ -64,6 +74,9 @@ app.use('/api/admin/users', require('./routes/adminUsers'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/chat', require('./routes/chat'));
 app.use('/api/email', require('./routes/email'));
+app.use('/api/sms', require('./routes/sms'));
+app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/payments', require('./routes/payments'));
 app.use('/api/upload', require('./routes/upload'));
 app.use('/api/newsletter', require('./routes/newsletter'));
 app.use('/api/messages', require('./routes/messages'));

@@ -223,6 +223,8 @@ router.post('/', [
       }
     }
 
+    // Note: Order confirmation notification removed - will be sent after payment success
+
     res.status(201).json({
       success: true,
       order: {
@@ -326,7 +328,7 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
     }
 
     const { id } = req.params;
-    const { status, payment_status } = req.body;
+    const { status, payment_status } = req.body || {};
 
     if (!status && !payment_status) {
       return res.status(400).json({ error: 'Status or payment_status required' });
@@ -358,7 +360,56 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    res.json(result.rows[0]);
+    const updatedOrder = result.rows[0];
+
+    // Send notifications based on status changes
+    try {
+      if (status === 'shipped') {
+        // Send order shipped notification
+        const notificationResponse = await fetch(`${process.env.API_BASE_URL || 'http://localhost:3003'}/api/notifications/send/order-shipped`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${req.headers.authorization}`
+          },
+          body: JSON.stringify({
+            orderId: id,
+            shippingData: {
+              trackingNumber: req.body.trackingNumber,
+              estimatedDelivery: req.body.estimatedDelivery
+            }
+          })
+        });
+
+        if (notificationResponse.ok) {
+          console.log('📧 Order shipped notification sent');
+        }
+      } else if (status === 'delivered') {
+        // Send order delivered notification
+        const notificationResponse = await fetch(`${process.env.API_BASE_URL || 'http://localhost:3003'}/api/notifications/send/order-delivered`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${req.headers.authorization}`
+          },
+          body: JSON.stringify({
+            orderId: id,
+            deliveryData: {
+              deliveryDate: new Date().toISOString()
+            }
+          })
+        });
+
+        if (notificationResponse.ok) {
+          console.log('📧 Order delivered notification sent');
+        }
+      }
+    } catch (notificationError) {
+      console.error('❌ Error sending notification:', notificationError);
+      // Don't fail the order update if notification fails
+    }
+
+    res.json(updatedOrder);
 
   } catch (error) {
     console.error('Order update error:', error);

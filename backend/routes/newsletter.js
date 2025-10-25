@@ -201,6 +201,12 @@ router.put('/settings', authenticateToken, [
   body('is_enabled').optional().isBoolean()
 ], async (req, res) => {
   try {
+    console.log('Newsletter settings update - Request received');
+    console.log('Newsletter settings update - req.method:', req.method);
+    console.log('Newsletter settings update - req.headers:', req.headers);
+    console.log('Newsletter settings update - req.body:', req.body);
+    console.log('Newsletter settings update - req.body type:', typeof req.body);
+    
     const adminRoles = ['super_admin', 'admin', 'manager', 'support'];
     if (!adminRoles.includes(req.user.role)) {
       return res.status(403).json({ error: 'Admin access required' });
@@ -211,7 +217,14 @@ router.put('/settings', authenticateToken, [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const updates = req.body;
+    const updates = req.body || {};
+    console.log('Newsletter settings update - updates:', updates);
+    console.log('Newsletter settings update - updates keys:', Object.keys(updates));
+
+    // If no updates provided, return error
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'No update data provided' });
+    }
 
     // Build update query dynamically
     const allowedFields = ['title', 'subtitle', 'description', 'offer_text', 'button_text', 'image_url', 'is_enabled'];
