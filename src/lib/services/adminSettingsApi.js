@@ -4,17 +4,20 @@
  */
 
 import { api } from './api';
+import adminApiClient from './adminApiClient';
 
 // Settings API
 export const adminSettingsApi = {
-  // Get settings
+  // Get settings (use admin token so backend can require auth later)
   async getSettings() {
-    return await api.get('/admin/settings');
+    const res = await adminApiClient.get('/admin/settings');
+    return res?.data ?? res;
   },
 
-  // Update settings
+  // Update settings (use admin token for authenticated request)
   async updateSettings(settingsData) {
-    return await api.put('/admin/settings', settingsData);
+    const res = await adminApiClient.put('/admin/settings', settingsData);
+    return res?.data ?? res;
   },
 
   // Get collections

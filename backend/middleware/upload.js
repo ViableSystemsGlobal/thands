@@ -4,6 +4,9 @@ const path = require('path');
 const fs = require('fs').promises;
 const { v4: uuidv4 } = require('uuid');
 
+// Get the project root directory (two levels up from backend/middleware)
+const projectRoot = path.resolve(__dirname, '..', '..');
+
 // Ensure upload directories exist
 const ensureUploadDirs = async () => {
   const dirs = [
@@ -16,14 +19,28 @@ const ensureUploadDirs = async () => {
     'uploads/newsletter/original',
     'uploads/newsletter/thumbnails',
     'uploads/newsletter/medium',
+    'uploads/hero',
+    'uploads/hero/original',
+    'uploads/hero/thumbnails',
+    'uploads/hero/medium',
+    'uploads/collection',
+    'uploads/collection/original',
+    'uploads/collection/thumbnails',
+    'uploads/collection/medium',
     'uploads/temp'
   ];
 
   for (const dir of dirs) {
     try {
-      await fs.mkdir(dir, { recursive: true });
+      // Use absolute path from project root
+      const fullPath = path.join(projectRoot, dir);
+      await fs.mkdir(fullPath, { recursive: true });
+      console.log(`✅ Created/verified directory: ${fullPath}`);
     } catch (error) {
       // Directory already exists, ignore
+      if (error.code !== 'EEXIST') {
+        console.error(`Error creating directory ${dir}:`, error);
+      }
     }
   }
 };
@@ -82,7 +99,13 @@ const processImage = async (buffer, filename, type = 'product') => {
     };
 
     for (const [sizeName, config] of Object.entries(sizes)) {
-      const outputPath = path.join('uploads', type, sizeName, `${fileId}-${config.suffix}.webp`);
+      // Use absolute path from project root
+      const outputDir = path.join(projectRoot, 'uploads', type, sizeName);
+      const outputPath = path.join(outputDir, `${fileId}-${config.suffix}.webp`);
+      
+      // Ensure the directory exists before writing
+      await fs.mkdir(outputDir, { recursive: true });
+      
       console.log(`Processing ${sizeName} to ${outputPath}`);
       
       let sharpInstance = sharp(buffer);
@@ -102,6 +125,7 @@ const processImage = async (buffer, filename, type = 'product') => {
       
       console.log(`Successfully processed ${sizeName}`);
       
+      // URL is relative to the web root, not the file system
       processedImages[sizeName] = {
         path: outputPath,
         url: `/uploads/${type}/${sizeName}/${fileId}-${config.suffix}.webp`,

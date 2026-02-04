@@ -3,10 +3,12 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import AdminLayout from "@/layouts/AdminLayout";
 import { Loader2 } from "lucide-react";
 
+// Import Dashboard and Orders directly to avoid dynamic import issues
+import AdminDashboard from "@/pages/admin/Dashboard";
+import AdminOrders from "@/pages/admin/Orders";
+
 const AdminLoginPage = lazy(() => import("@/pages/admin/Login"));
-const AdminDashboard = lazy(() => import("@/pages/admin/Dashboard"));
 const AdminProducts = lazy(() => import("@/pages/admin/Products"));
-const AdminOrders = lazy(() => import("@/pages/admin/Orders"));
 const AdminConsultations = lazy(() => import("@/pages/admin/Consultations"));
 const AdminSales = lazy(() => import("@/pages/admin/Sales"));
 const AdminSettings = lazy(() => import("@/pages/admin/Settings"));
@@ -22,10 +24,10 @@ const KnowledgeBase = lazy(() => import("@/pages/admin/KnowledgeBase"));
 const Newsletter = lazy(() => import("@/pages/admin/Newsletter"));
 const ChatLeads = lazy(() => import("@/pages/admin/ChatLeads"));
 const ChatMonitoring = lazy(() => import("@/pages/admin/ChatMonitoring"));
+const Email = lazy(() => import("@/pages/admin/Email"));
+const SMS = lazy(() => import("@/pages/admin/SMS"));
 
 // Communication pages
-const AdminEmail = lazy(() => import("@/pages/admin/communication/Email"));
-const AdminSMS = lazy(() => import("@/pages/admin/communication/SMS"));
 const NotificationSettings = lazy(() => import("@/pages/admin/communication/NotificationSettings"));
 
 const AdminPageFallback = () => (
@@ -65,10 +67,10 @@ const AdminRoutes = () => {
           <Route path="newsletter" element={<Newsletter />} />
           <Route path="chat-leads" element={<ChatLeads />} />
           <Route path="chat-monitoring" element={<ChatMonitoring />} />
+          <Route path="email" element={<Email />} />
+          <Route path="sms" element={<SMS />} />
           
           {/* Communication routes */}
-          <Route path="communication/email" element={<AdminEmail />} />
-          <Route path="communication/sms" element={<AdminSMS />} />
           <Route path="communication/notifications" element={<NotificationSettings />} />
           
           {/* Default redirect for /admin or /admin/ */}

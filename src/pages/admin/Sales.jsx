@@ -33,7 +33,8 @@ import {
   Title,
   Tooltip,
   Legend,
-  ArcElement
+  ArcElement,
+  Filler
 } from 'chart.js';
 import { Line, Bar, Pie, Doughnut } from 'react-chartjs-2';
 import { getSalesAnalytics } from "@/lib/services/adminApi";
@@ -50,7 +51,8 @@ ChartJS.register(
   ArcElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  Filler
 );
 
 const SalesContent = () => {
@@ -87,6 +89,11 @@ const SalesContent = () => {
     refundRate: 0,
     refundRateChange: 0
   });
+
+  // Debug: Log metrics whenever they change
+  useEffect(() => {
+    console.log('📊 Metrics State Updated:', metrics);
+  }, [metrics]);
 
   // Chart configurations
   const chartOptions = {
@@ -196,6 +203,15 @@ const SalesContent = () => {
     
     try {
       console.log('🔍 Admin Sales: Starting to fetch sales analytics...');
+      console.log('🔍 Admin Sales: Date range:', { from: dateRange.from, to: dateRange.to });
+      console.log('🔍 Admin Sales: Comparison period:', comparisonPeriod);
+      
+      // Check if admin token exists
+      const adminToken = localStorage.getItem('admin_auth_token');
+      console.log('🔐 Admin Sales: Admin token exists:', !!adminToken);
+      if (!adminToken) {
+        throw new Error('Admin authentication required. Please log in again.');
+      }
 
       // Calculate comparison period dates
       const comparisonStart = comparisonPeriod === 'previous' 
@@ -206,16 +222,29 @@ const SalesContent = () => {
         : subDays(dateRange.to, 365);
 
       // Fetch sales analytics from our new API
-      const analytics = await getSalesAnalytics({
+      const requestParams = {
         start_date: dateRange.from.toISOString(),
         end_date: dateRange.to.toISOString(),
         comparison_start_date: comparisonStart.toISOString(),
         comparison_end_date: comparisonEnd.toISOString()
-      });
+      };
+      
+      console.log('🌐 Admin Sales: Making API request with params:', requestParams);
+      
+      const analytics = await getSalesAnalytics(requestParams);
 
       console.log('✅ Admin Sales: Analytics fetched:', analytics);
+      console.log('📊 Admin Sales: Analytics structure:', {
+        hasMetrics: !!analytics.metrics,
+        hasCharts: !!analytics.charts,
+        hasTables: !!analytics.tables,
+        metricsKeys: analytics.metrics ? Object.keys(analytics.metrics) : 'No metrics'
+      });
 
       // Set metrics from API response
+      console.log('📊 Frontend: Received analytics:', analytics);
+      console.log('📊 Frontend: Metrics object:', analytics.metrics);
+      
       setMetrics(analytics.metrics || {});
 
       // Set chart data from API response
@@ -236,10 +265,29 @@ const SalesContent = () => {
 
     } catch (error) {
       console.error("❌ Admin Sales: Error fetching sales data:", error);
+      console.error("❌ Admin Sales: Error details:", error.message);
+      console.error("❌ Admin Sales: Error stack:", error.stack);
+      
       toast({ 
         title: "Error", 
         description: "Failed to fetch sales data: " + error.message, 
         variant: "destructive" 
+      });
+      
+      // Set default metrics to show something
+      setMetrics({
+        totalSales: 0,
+        totalSalesChange: 0,
+        averageOrderValue: 0,
+        averageOrderValueChange: 0,
+        totalOrders: 0,
+        totalOrdersChange: 0,
+        newCustomers: 0,
+        newCustomersChange: 0,
+        conversionRate: 0,
+        conversionRateChange: 0,
+        refundRate: 0,
+        refundRateChange: 0
       });
     } finally {
       setLoading(false);

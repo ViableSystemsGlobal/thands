@@ -1,15 +1,40 @@
 const express = require('express');
 const router = express.Router();
 const { query } = require('../config/database');
+const adminBranchFilter = require('../middleware/adminBranchFilter');
+
+// Helper function to build branch filter SQL (returns condition and value)
+function buildBranchFilter(branchFilter, tableAlias = '') {
+  const prefix = tableAlias ? `${tableAlias}.` : '';
+  if (branchFilter) {
+    // Include orders with matching branch_code OR NULL (legacy orders without branch_code)
+    return {
+      condition: `AND (${prefix}branch_code = $ OR ${prefix}branch_code IS NULL)`,
+      value: branchFilter
+    };
+  }
+  return null; // No filter = view all branches
+}
+
+// Apply branch filter middleware to all admin routes
+router.use(adminBranchFilter);
 
 // Get dashboard data
 router.get('/dashboard', async (req, res) => {
   try {
     const { start_date, end_date } = req.query;
+    const branchFilter = req.adminBranchFilter;
     
     // Set default date range if not provided
     const startDate = start_date || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(); // 30 days ago
     const endDate = end_date || new Date().toISOString();
+
+    // Build branch filter
+    const branchFilterObj = buildBranchFilter(branchFilter, 'o');
+    const branchFilterSQL = branchFilterObj ? branchFilterObj.condition.replace('$', '$3') : '';
+    const queryParams = branchFilterObj 
+      ? [startDate, endDate, branchFilterObj.value]
+      : [startDate, endDate];
 
     // Get total orders and revenue
     const ordersResult = await query(
@@ -18,9 +43,9 @@ router.get('/dashboard', async (req, res) => {
               AVG(CASE WHEN payment_status = 'paid' THEN base_total ELSE NULL END) as avg_order_value,
               SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_orders,
               SUM(CASE WHEN payment_status = 'pending' THEN 1 ELSE 0 END) as pending_payments
-       FROM orders 
-       WHERE created_at >= $1 AND created_at <= $2`,
-      [startDate, endDate]
+       FROM orders o
+       WHERE created_at >= $1 AND created_at <= $2 ${branchFilterSQL}`,
+      queryParams
     );
 
     // Get total customers (all time, not just new ones)
@@ -63,15 +88,31 @@ router.get('/dashboard', async (req, res) => {
     );
 
     // Get recent orders (limited to 5)
+    const recentOrdersBranchFilterObj = buildBranchFilter(branchFilter, 'o');
+    const recentOrdersBranchFilterSQL = recentOrdersBranchFilterObj 
+      ? recentOrdersBranchFilterObj.condition.replace('$', '$1')
+      : '';
+    const recentOrdersParams = recentOrdersBranchFilterObj 
+      ? [recentOrdersBranchFilterObj.value]
+      : [];
     const recentOrdersResult = await query(
       `SELECT o.*, c.first_name, c.last_name, c.email
        FROM orders o
        LEFT JOIN customers c ON o.customer_id = c.id
+       WHERE 1=1 ${recentOrdersBranchFilterSQL}
        ORDER BY o.created_at DESC
-       LIMIT 5`
+       LIMIT 5`,
+      recentOrdersParams
     );
 
     // Get top products
+    const topProductsBranchFilterObj = buildBranchFilter(branchFilter, 'o');
+    const topProductsBranchFilterSQL = topProductsBranchFilterObj 
+      ? topProductsBranchFilterObj.condition.replace('$', '$3')
+      : '';
+    const topProductsParams = topProductsBranchFilterObj 
+      ? [startDate, endDate, topProductsBranchFilterObj.value]
+      : [startDate, endDate];
     const topProductsResult = await query(
       `SELECT p.id, p.name, p.image_url, p.price,
               SUM(oi.quantity) as total_sold,
@@ -79,11 +120,11 @@ router.get('/dashboard', async (req, res) => {
        FROM products p
        JOIN order_items oi ON p.id = oi.product_id
        JOIN orders o ON oi.order_id = o.id
-       WHERE o.payment_status = 'paid' AND o.created_at >= $1 AND o.created_at <= $2
+       WHERE o.payment_status = 'paid' AND o.created_at >= $1 AND o.created_at <= $2 ${topProductsBranchFilterSQL}
        GROUP BY p.id, p.name, p.image_url, p.price
        ORDER BY total_sold DESC
        LIMIT 10`,
-      [startDate, endDate]
+      topProductsParams
     );
 
     const dashboardData = {
@@ -136,6 +177,7 @@ router.get('/settings', async (req, res) => {
         contact_email: 'hello@tailoredhands.africa',
         contact_phone: '+233 24 532 7668',
         exchange_rate_ghs: 16.0,
+        exchange_rate_gbp: 0.79,
         hero_image_url: 'https://storage.googleapis.com/hostinger-horizons-assets-prod/3a44a4a9-7b05-4768-be68-8eeb55d662d7/f9e9c1ced82f14bddc858a8dd7b36cff.png',
         hero_title: 'Modern Elegance Redefined',
         hero_subtitle: 'Discover our collection of meticulously crafted African-inspired pieces that blend traditional aesthetics with contemporary design.',
@@ -162,80 +204,47 @@ router.get('/settings', async (req, res) => {
   }
 });
 
-// Update settings
-router.put('/settings', async (req, res) => {
-  try {
-    const {
-      store_name,
-      contact_email,
-      contact_phone,
-      exchange_rate_ghs,
-      hero_image_url,
-      hero_title,
-      hero_subtitle,
-      hero_button_text
-    } = req.body;
-
-    // Check if settings exist
-    const existingSettings = await query('SELECT id FROM settings LIMIT 1');
-    
-    let result;
-    if (existingSettings.rows.length === 0) {
-      // Create new settings record
-      result = await query(
-        `INSERT INTO settings (
-          store_name, contact_email, contact_phone, exchange_rate_ghs,
-          hero_image_url, hero_title, hero_subtitle,
-          created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW()) 
-         RETURNING *`,
-        [store_name, contact_email, contact_phone, exchange_rate_ghs, hero_image_url, hero_title, hero_subtitle]
-      );
-    } else {
-      // Update existing settings
-      result = await query(
-        `UPDATE settings SET 
-          store_name = COALESCE($1, store_name),
-          contact_email = COALESCE($2, contact_email),
-          contact_phone = COALESCE($3, contact_phone),
-          exchange_rate_ghs = COALESCE($4, exchange_rate_ghs),
-          hero_image_url = COALESCE($5, hero_image_url),
-          hero_title = COALESCE($6, hero_title),
-          hero_subtitle = COALESCE($7, hero_subtitle),
-          updated_at = NOW()
-        WHERE id = $8 
-        RETURNING *`,
-        [store_name, contact_email, contact_phone, exchange_rate_ghs, hero_image_url, hero_title, hero_subtitle, existingSettings.rows[0].id]
-      );
-    }
-
-    res.json({
-      success: true,
-      settings: result.rows[0]
-    });
-
-  } catch (error) {
-    console.error('Error updating settings:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to update settings'
-    });
-  }
-});
 
 // PUT /api/admin/settings - Update settings
 router.put('/settings', async (req, res) => {
-  try {
-    const {
-      store_name,
-      contact_email,
-      contact_phone,
-      exchange_rate_ghs,
-      hero_image_url,
-      hero_title,
-      hero_subtitle,
-      hero_button_text
-    } = req.body;
+    try {
+      console.log('🔍 Received settings update request:', {
+        paystack_public_key: req.body.paystack_public_key ? 'SET' : 'NOT SET',
+        paystack_secret_key: req.body.paystack_secret_key ? 'SET' : 'NOT SET',
+        body_keys: Object.keys(req.body)
+      });
+      
+      const {
+        store_name,
+        contact_email,
+        contact_phone,
+        address,
+        store_description,
+        currency,
+        timezone,
+        exchange_rate_ghs,
+        exchange_rate_gbp,
+        paystack_public_key,
+        paystack_secret_key,
+        hero_image_url,
+        hero_title,
+        hero_subtitle,
+        hero_button_text,
+        favicon_url,
+        navbar_logo_url,
+        footer_logo_url,
+        captcha_enabled,
+        google_places_api_key
+      } = req.body;
+      
+      console.log('🔍 Destructured Paystack keys:', {
+        paystack_public_key: paystack_public_key ? 'SET' : 'NOT SET',
+        paystack_secret_key: paystack_secret_key ? 'SET' : 'NOT SET'
+      });
+
+    // Debug logging
+    console.log('🔍 Backend received google_places_api_key:', google_places_api_key);
+    console.log('🔍 Backend received store_name:', store_name);
 
     // Check if settings exist
     const existingSettings = await query('SELECT id FROM settings LIMIT 1');
@@ -245,12 +254,17 @@ router.put('/settings', async (req, res) => {
       // Create new settings record
       result = await query(
         `INSERT INTO settings (
-          store_name, contact_email, contact_phone, exchange_rate_ghs,
-          hero_image_url, hero_title, hero_subtitle,
+          store_name, contact_email, contact_phone, address, store_description,
+          currency, timezone, exchange_rate_ghs, exchange_rate_gbp, paystack_public_key, paystack_secret_key,
+          hero_image_url, hero_title, hero_subtitle, hero_button_text, favicon_url,
+          navbar_logo_url, footer_logo_url, captcha_enabled, google_places_api_key,
           created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, NOW(), NOW())
          RETURNING *`,
-        [store_name, contact_email, contact_phone, exchange_rate_ghs, hero_image_url, hero_title, hero_subtitle]
+        [store_name, contact_email, contact_phone, address, store_description,
+         currency, timezone, exchange_rate_ghs, exchange_rate_gbp || 0.79, paystack_public_key, paystack_secret_key,
+         hero_image_url, hero_title, hero_subtitle, hero_button_text, favicon_url,
+         navbar_logo_url, footer_logo_url, captcha_enabled, google_places_api_key]
       );
     } else {
       // Update existing settings
@@ -259,21 +273,46 @@ router.put('/settings', async (req, res) => {
           store_name = COALESCE($1, store_name),
           contact_email = COALESCE($2, contact_email),
           contact_phone = COALESCE($3, contact_phone),
-          exchange_rate_ghs = COALESCE($4, exchange_rate_ghs),
-          hero_image_url = COALESCE($5, hero_image_url),
-          hero_title = COALESCE($6, hero_title),
-          hero_subtitle = COALESCE($7, hero_subtitle),
+          address = COALESCE($4, address),
+          store_description = COALESCE($5, store_description),
+          currency = COALESCE($6, currency),
+          timezone = COALESCE($7, timezone),
+          exchange_rate_ghs = COALESCE($8, exchange_rate_ghs),
+          exchange_rate_gbp = COALESCE($9, exchange_rate_gbp),
+          paystack_public_key = COALESCE($10, paystack_public_key),
+          paystack_secret_key = COALESCE($11, paystack_secret_key),
+          hero_image_url = COALESCE($12, hero_image_url),
+          hero_title = COALESCE($13, hero_title),
+          hero_subtitle = COALESCE($14, hero_subtitle),
+          hero_button_text = COALESCE($15, hero_button_text),
+          favicon_url = COALESCE($16, favicon_url),
+          navbar_logo_url = COALESCE($17, navbar_logo_url),
+          footer_logo_url = COALESCE($18, footer_logo_url),
+          captcha_enabled = COALESCE($19, captcha_enabled),
+          google_places_api_key = COALESCE($20, google_places_api_key),
           updated_at = NOW()
-        WHERE id = $8
+        WHERE id = $21
         RETURNING *`,
-        [store_name, contact_email, contact_phone, exchange_rate_ghs, hero_image_url, hero_title, hero_subtitle, existingSettings.rows[0].id]
+        [store_name, contact_email, contact_phone, address, store_description,
+         currency, timezone, exchange_rate_ghs, exchange_rate_gbp || 0.79, paystack_public_key, paystack_secret_key,
+         hero_image_url, hero_title, hero_subtitle, hero_button_text, favicon_url,
+         navbar_logo_url, footer_logo_url, captcha_enabled, google_places_api_key, existingSettings.rows[0].id]
       );
+      
+      console.log('🔍 SQL UPDATE executed with Paystack keys:', {
+        paystack_public_key: paystack_public_key ? 'SET' : 'NOT SET',
+        paystack_secret_key: paystack_secret_key ? 'SET' : 'NOT SET'
+      });
     }
 
     res.json({ success: true, settings: result.rows[0] });
   } catch (error) {
     console.error('Error updating settings:', error);
-    res.status(500).json({ success: false, error: 'Failed to update settings' });
+    const message = error.message || 'Failed to update settings';
+    res.status(500).json({
+      success: false,
+      error: process.env.NODE_ENV !== 'production' ? message : 'Failed to update settings',
+    });
   }
 });
 
@@ -363,6 +402,33 @@ router.put('/users/:id/password', async (req, res) => {
   } catch (error) {
     console.error('Error updating password:', error);
     res.status(500).json({ success: false, error: 'Failed to update password' });
+  }
+});
+
+// PUT /api/admin/settings/google-places-api-key - Update only Google Places API key
+router.put('/settings/google-places-api-key', async (req, res) => {
+  try {
+    const { google_places_api_key } = req.body;
+    
+    console.log('🔍 Dedicated route received google_places_api_key:', google_places_api_key);
+    
+    const result = await query(
+      'UPDATE settings SET google_places_api_key = $1 WHERE id = 1 RETURNING google_places_api_key',
+      [google_places_api_key]
+    );
+    
+    console.log('🔍 Database update result:', result.rows[0]);
+    
+    res.json({ 
+      success: true, 
+      google_places_api_key: result.rows[0].google_places_api_key 
+    });
+  } catch (error) {
+    console.error('Error updating Google Places API key:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to update Google Places API key' 
+    });
   }
 });
 

@@ -230,6 +230,14 @@ export const usePaymentFirst = () => {
     clearValidationErrors
   ) => {
     console.log('🚀 Starting payment-first checkout process');
+    console.log('🔍 processPaymentFirst parameters:', {
+      totalAmount,
+      baseSubtotal,
+      shippingCost,
+      couponDiscountAmount,
+      formData: formData ? 'SET' : 'NOT SET',
+      cart: cart ? cart.length : 'NOT SET'
+    });
     
     // Clear any previous validation errors
     clearValidationErrors();
@@ -410,7 +418,16 @@ export const usePaymentFirst = () => {
       }
       
       // Get payment configuration
+      console.log('🚨 DEBUG: About to call getPaymentConfig()');
       const config = await getPaymentConfig();
+      console.log('🚨 DEBUG: getPaymentConfig() returned:', config);
+      console.log('🔍 Loaded payment config:', {
+        config_exists: !!config,
+        paystack_public_key: config?.paystack_public_key ? 'SET' : 'NOT SET',
+        paystack_secret_key: config?.paystack_secret_key ? 'SET' : 'NOT SET',
+        full_config: config
+      });
+      
       if (!config?.paystack_public_key) {
         throw new Error('Paystack configuration not found. Please configure payment settings in admin panel.');
       }
@@ -473,9 +490,42 @@ export const usePaymentFirst = () => {
         throw new Error('PaystackPop is not available. Please refresh the page and try again.');
       }
 
+      // Validate totalAmount before calculation
+      if (!totalAmount || isNaN(totalAmount) || totalAmount <= 0) {
+        console.error('❌ Invalid totalAmount:', totalAmount);
+        throw new Error(`Invalid cart total: ${totalAmount}. Please ensure your cart has items.`);
+      }
+
+      // Check exchange rate
+      if (!exchangeRate || isNaN(exchangeRate) || exchangeRate <= 0) {
+        console.error('❌ Invalid exchange rate:', exchangeRate);
+        throw new Error('Exchange rate not available. Please refresh the page and try again.');
+      }
+
       const paymentDetailsGHS = getPaymentAmountAndCurrency(totalAmount);
-      const amountInKobo = Math.round(paymentDetailsGHS.amount * 100);
+      
+      // Validate the converted amount
+      if (!paymentDetailsGHS || !paymentDetailsGHS.amount || isNaN(paymentDetailsGHS.amount) || paymentDetailsGHS.amount <= 0) {
+        console.error('❌ Invalid paymentDetailsGHS:', paymentDetailsGHS);
+        throw new Error(`Invalid payment amount calculation. Total: ${totalAmount}, Exchange Rate: ${exchangeRate}, Converted: ${paymentDetailsGHS?.amount}`);
+      }
+
+      // Paystack requires amounts in the smallest currency unit
+      // For GHS (Ghana Cedis), the smallest unit is pesewas (1 GHS = 100 pesewas)
+      // Paystack's API uses "kobo" as a generic term for smallest unit, even for GHS
+      // So we convert: GHS amount * 100 = pesewas (which Paystack calls "kobo")
+      const amountInGHS = paymentDetailsGHS.amount; // e.g., 50.00 GHS
+      const amountInSmallestUnit = Math.round(amountInGHS * 100); // e.g., 5000 pesewas
       const reference = `TH-${Date.now()}`;
+
+      console.log('🔍 Payment calculation debug:', {
+        totalAmountUSD: totalAmount,
+        exchangeRate,
+        amountInGHS: paymentDetailsGHS.amount,
+        amountInSmallestUnit, // This is in pesewas for GHS
+        currency: paymentDetailsGHS.currency,
+        isValidAmount: !isNaN(amountInSmallestUnit) && amountInSmallestUnit > 0
+      });
 
       // Create payment handler functions
       const handlePaymentSuccess = async (response) => {
@@ -545,11 +595,45 @@ export const usePaymentFirst = () => {
         });
       };
 
-      // Create payment configuration
+      console.log('🔍 About to create payment configuration with:', {
+        config_exists: !!config,
+        paystack_public_key: config?.paystack_public_key ? 'SET' : 'NOT SET',
+        formData_email: formData?.email,
+        amountInGHS,
+        amountInSmallestUnit, // Amount in pesewas (Paystack calls it "kobo")
+        reference
+      });
+
+      // Validate required fields before creating payment config
+      if (!config.paystack_public_key) {
+        throw new Error('Paystack public key is not configured. Please configure payment settings in admin panel.');
+      }
+
+      if (!formData.email || !formData.email.includes('@')) {
+        throw new Error('Valid email address is required for payment.');
+      }
+
+      if (!amountInSmallestUnit || amountInSmallestUnit <= 0 || isNaN(amountInSmallestUnit)) {
+        console.error('❌ Invalid amountInSmallestUnit calculation:', {
+          totalAmount,
+          exchangeRate,
+          paymentDetailsGHS,
+          amountInGHS,
+          amountInSmallestUnit,
+          cartLength: cart?.length,
+          baseSubtotal,
+          shippingCost,
+          couponDiscountAmount
+        });
+        throw new Error(`Invalid payment amount: ${amountInSmallestUnit} pesewas (${amountInGHS} GHS). Total: ${totalAmount} USD, Exchange Rate: ${exchangeRate}. Please check your cart and try again.`);
+      }
+
+      // Create payment configuration - using the same format as working implementations
+      // Note: Paystack expects amount in smallest currency unit (pesewas for GHS)
       const paymentConfig = {
         key: config.paystack_public_key,
-        email: formData.email,
-        amount: amountInKobo,
+        email: formData.email.trim(),
+        amount: amountInSmallestUnit, // Amount in pesewas (Paystack's API calls it "kobo")
         currency: 'GHS',
         ref: reference,
         metadata: {
@@ -561,15 +645,27 @@ export const usePaymentFirst = () => {
             price: item.price
           })))
         },
-        onSuccess: handlePaymentSuccess,
-        onCancel: handlePaymentClose
+        callback: handlePaymentSuccess,
+        onClose: handlePaymentClose
       };
+
+      console.log('🔍 Payment config being sent to Paystack:', {
+        key: paymentConfig.key ? 'SET' : 'NOT SET',
+        email: paymentConfig.email,
+        amount: paymentConfig.amount, // This is in pesewas (smallest unit)
+        amountInGHS: `${(paymentConfig.amount / 100).toFixed(2)} GHS`, // Convert back to GHS for display
+        currency: paymentConfig.currency,
+        ref: paymentConfig.ref,
+        hasValidAmount: !isNaN(paymentConfig.amount) && paymentConfig.amount > 0,
+        hasCallback: typeof paymentConfig.callback === 'function',
+        hasOnClose: typeof paymentConfig.onClose === 'function'
+      });
 
       console.log('🚀 Launching payment popup...');
       
-      // Use new PaystackPop() instead of deprecated setup()
-      const paystack = new window.PaystackPop();
-      paystack.newTransaction(paymentConfig);
+      // Use PaystackPop.setup() which is the standard and working method
+      const handler = window.PaystackPop.setup(paymentConfig);
+      handler.openIframe();
 
       console.log('🎉 Payment popup should now be visible!');
 

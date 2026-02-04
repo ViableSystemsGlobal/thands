@@ -19,12 +19,20 @@ export const CurrencyProvider = ({ children }) => {
     }
     return "USD";
   });
+  
+  // Expose setCurrency to BranchContext for auto-updates
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.__currencyContext = { currency, setCurrency };
+    }
+  }, [currency]);
   const [exchangeRate, setExchangeRate] = useState(() => {
     // Get the current rate from the service immediately
     const currentRate = exchangeRateService.getExchangeRate();
     console.log("🔄 CurrencyContext initializing with rate:", currentRate);
     return currentRate;
-  }); 
+  });
+  const [gbpExchangeRate, setGbpExchangeRate] = useState(0.79); // Default GBP to USD rate
   const [loadingRate, setLoadingRate] = useState(true);
 
   const fetchExchangeRate = useCallback(async () => {
@@ -32,7 +40,7 @@ export const CurrencyProvider = ({ children }) => {
     try {
       console.log("🔄 CurrencyContext: Loading exchange rate...");
       // Use the centralized exchange rate service
-      await exchangeRateService.loadExchangeRateFromSettings();
+      await loadExchangeRateFromSettings();
       const currentRate = exchangeRateService.getExchangeRate();
       setExchangeRate(currentRate);
       console.log("✅ CurrencyContext: Exchange rate loaded from centralized service:", currentRate);
@@ -87,9 +95,18 @@ export const CurrencyProvider = ({ children }) => {
     if (targetCurrency === "GHS" && !amountAlreadyInTargetCurrency) {
       // Use Math.round to avoid floating point precision issues
       finalAmount = Math.round(amount * exchangeRate * 100) / 100;
+    } else if (targetCurrency === "GBP" && !amountAlreadyInTargetCurrency) {
+      // Convert USD to GBP
+      finalAmount = Math.round(amount * gbpExchangeRate * 100) / 100;
     }
 
-    const symbol = targetCurrency === "GHS" ? "₵" : "$";
+    // Get correct currency symbol
+    let symbol = "$";
+    if (targetCurrency === "GHS") {
+      symbol = "₵";
+    } else if (targetCurrency === "GBP") {
+      symbol = "£";
+    }
     
     // Format with thousand separators
     const formattedAmount = new Intl.NumberFormat('en-US', {
@@ -116,11 +133,15 @@ export const CurrencyProvider = ({ children }) => {
       const result = Math.round(priceInUSD * exchangeRate * 100) / 100;
       console.log(`💰 Conversion result: ${priceInUSD} USD * ${exchangeRate} = ${result} GHS`);
       return result;
+    } else if (currency === "GBP") {
+      const result = Math.round(priceInUSD * gbpExchangeRate * 100) / 100;
+      console.log(`💰 Conversion result: ${priceInUSD} USD * ${gbpExchangeRate} = ${result} GBP`);
+      return result;
     }
     
     console.log(`💰 Keeping USD: ${priceInUSD}`);
     return priceInUSD;
-  }, [currency, exchangeRate]);
+  }, [currency, exchangeRate, gbpExchangeRate]);
 
   const convertToGHS = useCallback((priceInUSD) => {
     if (typeof priceInUSD !== 'number' || isNaN(priceInUSD)) {
@@ -139,10 +160,29 @@ export const CurrencyProvider = ({ children }) => {
     };
   }, [exchangeRate]);
 
+  // Fetch GBP exchange rate
+  useEffect(() => {
+    const fetchGbpRate = async () => {
+      try {
+        const response = await fetch('http://localhost:3003/api/exchange-rate');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.exchange_rate_gbp) {
+            setGbpExchangeRate(parseFloat(data.exchange_rate_gbp));
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to fetch GBP exchange rate:', error);
+      }
+    };
+    fetchGbpRate();
+  }, []);
+
   const value = {
     currency,
     setCurrency,
     exchangeRate,
+    gbpExchangeRate,
     fetchExchangeRate,
     formatPrice,
     convertToActiveCurrency, 

@@ -22,7 +22,9 @@ import {
   Eye,
   EyeOff,
   Image,
-  Sparkles
+  Sparkles,
+  Upload,
+  X
 } from 'lucide-react';
 
 const Newsletter = () => {
@@ -47,6 +49,8 @@ const Newsletter = () => {
   const [subscribersPage, setSubscribersPage] = useState(1);
   const [subscribersPerPage] = useState(20);
   const [totalSubscribers, setTotalSubscribers] = useState(0);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imagePreview, setImagePreview] = useState(null);
   
   const { toast } = useToast();
 
@@ -127,6 +131,64 @@ const Newsletter = () => {
       ...prev,
       [field]: value
     }));
+  };
+
+  const handleImageUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Invalid File",
+        description: "Please select an image file.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "File Too Large",
+        description: "Please select an image smaller than 5MB.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+
+      const response = await adminApiClient.post('/upload/newsletter', formData);
+
+      const imageUrl = response.data?.url || response.url;
+      if (imageUrl) {
+        handleSettingsChange('image_url', imageUrl);
+        setImagePreview(imageUrl);
+        toast({
+          title: "Image Uploaded",
+          description: "Newsletter image uploaded successfully.",
+          className: "bg-green-50 border-green-200 text-green-700",
+        });
+      }
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      toast({
+        title: "Upload Failed",
+        description: "Failed to upload newsletter image.",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const removeImage = () => {
+    handleSettingsChange('image_url', '');
+    setImagePreview(null);
   };
 
   const saveSettings = async () => {
@@ -331,13 +393,65 @@ const Newsletter = () => {
                   </div>
                   
                   <div>
-                    <Label htmlFor="image_url">Image URL</Label>
-                    <Input
-                      id="image_url"
-                      value={newsletterSettings.image_url}
-                      onChange={(e) => handleSettingsChange('image_url', e.target.value)}
-                      placeholder="https://example.com/image.jpg"
-                    />
+                    <Label htmlFor="image_upload">Newsletter Image</Label>
+                    <div className="space-y-3">
+                      {/* Image Preview */}
+                      {(newsletterSettings.image_url || imagePreview) && (
+                        <div className="relative inline-block">
+                          <img
+                            src={newsletterSettings.image_url || imagePreview}
+                            alt="Newsletter preview"
+                            className="w-32 h-32 object-cover rounded-lg border"
+                          />
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0"
+                            onClick={removeImage}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      )}
+                      
+                      {/* Upload Button */}
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="file"
+                          id="image_upload"
+                          accept="image/*"
+                          onChange={handleImageUpload}
+                          className="hidden"
+                          disabled={uploadingImage}
+                        />
+                        <Label
+                          htmlFor="image_upload"
+                          className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          {uploadingImage ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#D2B48C]"></div>
+                          ) : (
+                            <Upload className="w-4 h-4" />
+                          )}
+                          {uploadingImage ? 'Uploading...' : 'Upload Image'}
+                        </Label>
+                        
+                        {/* Manual URL Input */}
+                        <div className="flex-1">
+                          <Input
+                            value={newsletterSettings.image_url}
+                            onChange={(e) => handleSettingsChange('image_url', e.target.value)}
+                            placeholder="Or enter image URL manually"
+                            className="text-sm"
+                          />
+                        </div>
+                      </div>
+                      
+                      <p className="text-xs text-gray-500">
+                        Upload an image or enter a URL. Recommended size: 400x300px
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -25,6 +25,7 @@ const ShippingRules = () => {
         min_amount: rule.min_order_value,
         max_amount: rule.max_order_value,
         shipping_fee: rule.shipping_cost,
+        per_kg_rate: rule.per_kg_rate,
         delivery_time: rule.estimated_days_min && rule.estimated_days_max 
           ? `${rule.estimated_days_min}-${rule.estimated_days_max}` 
           : null,
@@ -54,7 +55,8 @@ const ShippingRules = () => {
         state: formData.state || null,
         min_order_value: formData.min_amount ? Number(formData.min_amount) : 0,
         max_order_value: formData.max_amount ? Number(formData.max_amount) : null,
-        shipping_cost: Number(formData.shipping_fee),
+        shipping_cost: formData.shipping_fee ? Number(formData.shipping_fee) : 0,
+        per_kg_rate: formData.per_kg_rate ? Number(formData.per_kg_rate) : 0,
         estimated_days_min: formData.delivery_time ? parseInt(formData.delivery_time.split('-')[0]) : null,
         estimated_days_max: formData.delivery_time ? parseInt(formData.delivery_time.split('-')[1]) : null,
         is_active: formData.is_active !== undefined ? formData.is_active : true,

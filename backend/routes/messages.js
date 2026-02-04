@@ -78,7 +78,31 @@ router.post('/', [
       [name, email, subject, message, 'new']
     );
 
-    res.status(201).json(result.rows[0]);
+    const newMessage = result.rows[0];
+
+    // Send admin notification for new message
+    try {
+      const adminNotificationResponse = await fetch(`${process.env.API_BASE_URL || 'http://localhost:3003'}/api/notifications/send/admin/message`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          messageId: newMessage.id
+        })
+      });
+
+      if (adminNotificationResponse.ok) {
+        console.log('📧 Admin message notification sent');
+      } else {
+        console.error('❌ Failed to send admin message notification');
+      }
+    } catch (adminNotificationError) {
+      console.error('❌ Error sending admin message notification:', adminNotificationError);
+      // Don't fail the message creation if admin notification fails
+    }
+
+    res.status(201).json(newMessage);
   } catch (error) {
     console.error('Error creating message:', error);
     res.status(500).json({ error: 'Failed to create message', details: error.message });

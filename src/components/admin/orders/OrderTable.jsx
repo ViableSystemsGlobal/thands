@@ -41,6 +41,8 @@ const OrderTable = ({
         return 'bg-blue-100 text-blue-800';
       case 'processing':
         return 'bg-purple-100 text-purple-800';
+      case 'confirmed':
+        return 'bg-indigo-100 text-indigo-800';
       case 'pending':
         return 'bg-yellow-100 text-yellow-800';
       case 'cancelled':
@@ -88,14 +90,18 @@ const OrderTable = ({
               </tr>
             ) : (
               orders.map((order) => {
+                // Use base_total (database field) or total_amount (fallback)
+                const usdTotal = parseFloat(order.base_total || order.total_amount || 0);
+                const ghsTotal = parseFloat(order.base_total_ghs || order.total_amount_ghs || 0);
+                
                 // Use historical exchange rate for each order when available
                 let ghsTotalValue = 0;
                 
-                if (order.total_amount_ghs && order.total_amount_ghs > 0) {
+                if (ghsTotal > 0) {
                   // If we have stored GHS value, check if it's reasonable using the stored exchange rate
-                  if (order.exchange_rate && order.total_amount) {
-                    const expectedGHS = order.total_amount * order.exchange_rate;
-                    const storedGHS = order.total_amount_ghs;
+                  if (order.exchange_rate && usdTotal > 0) {
+                    const expectedGHS = usdTotal * order.exchange_rate;
+                    const storedGHS = ghsTotal;
                     const difference = Math.abs(expectedGHS - storedGHS);
                     const percentageDiff = (difference / expectedGHS) * 100;
                     
@@ -108,17 +114,21 @@ const OrderTable = ({
                     }
                   } else {
                     // Fallback to double-conversion detection if no stored rate
-                    const currentRatio = order.total_amount_ghs / order.total_amount;
-                    if (currentRatio > exchangeRate * 1.2 || currentRatio < exchangeRate * 0.8) {
-                      ghsTotalValue = order.total_amount * exchangeRate;
+                    if (usdTotal > 0) {
+                      const currentRatio = ghsTotal / usdTotal;
+                      if (currentRatio > exchangeRate * 1.2 || currentRatio < exchangeRate * 0.8) {
+                        ghsTotalValue = usdTotal * exchangeRate;
+                      } else {
+                        ghsTotalValue = ghsTotal;
+                      }
                     } else {
-                      ghsTotalValue = order.total_amount_ghs;
+                      ghsTotalValue = ghsTotal;
                     }
                   }
-                } else if (order.total_amount) {
+                } else if (usdTotal > 0) {
                   // No stored GHS value - calculate using stored rate or current rate
                   const rateToUse = order.exchange_rate || exchangeRate;
-                  ghsTotalValue = order.total_amount * rateToUse;
+                  ghsTotalValue = usdTotal * rateToUse;
                 }
                 
                 return (
@@ -127,24 +137,25 @@ const OrderTable = ({
                     <td className="py-3 px-4">
                       <div>
                         <p className="font-medium text-gray-900">
-                          {order.customers?.first_name || order.shipping_first_name} {order.customers?.last_name || order.shipping_last_name}
+                          {order.first_name || order.shipping_first_name} {order.last_name || order.shipping_last_name}
                         </p>
                         <p className="text-xs text-gray-500">
-                          {order.customers?.id?.length === 36 ? "Registered" : "Guest"}
+                          {order.email ? "Registered" : "Guest"}
                         </p>
                       </div>
                     </td>
-                    <td className="py-3 px-4 text-gray-700">{formatPrice(order.total_amount, false, "USD")}</td>
+                    <td className="py-3 px-4 text-gray-700">{formatPrice(usdTotal, false, "USD")}</td>
                     <td className="py-3 px-4 text-gray-700">
                       {formatPrice(ghsTotalValue, false, "GHS", true)}
                     </td>
                     <td className="py-3 px-4">
-                       <select
+                        <select
                           value={order.status || "pending"}
                           onChange={(e) => onUpdateStatus(order.id, e.target.value)}
                           className={`border rounded px-2 py-1 text-xs ${getOrderStatusClass(order.status)}`}
                         >
                           <option value="pending">Pending</option>
+                          <option value="confirmed">Confirmed</option>
                           <option value="processing">Processing</option>
                           <option value="shipped">Shipped</option>
                           <option value="delivered">Delivered</option>

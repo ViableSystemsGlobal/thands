@@ -8,13 +8,17 @@ const router = express.Router();
 // Use existing email and SMS systems
 const sendEmail = async ({ to, subject, message }) => {
   try {
+    console.log(`📧 sendEmail: Attempting to send email to ${to}`);
+    
     // Get email settings from database (same as existing email route)
     const settingsResult = await query('SELECT * FROM email_settings WHERE id = 1');
     if (settingsResult.rows.length === 0) {
+      console.error('❌ sendEmail: Email settings not configured');
       throw new Error('Email settings not configured');
     }
 
     const settings = settingsResult.rows[0];
+    console.log(`📧 sendEmail: Using SMTP host: ${settings.smtp_host}, from: ${settings.smtp_from_email}`);
 
     // Create transporter using existing settings
     const transporter = nodemailer.createTransport({
@@ -35,15 +39,24 @@ const sendEmail = async ({ to, subject, message }) => {
       html: message.replace(/\n/g, '<br>')
     };
 
+    console.log(`📧 sendEmail: Sending email with subject: ${subject}`);
     const result = await transporter.sendMail(mailOptions);
+    console.log(`✅ sendEmail: Email sent successfully. MessageId: ${result.messageId}`);
     return result;
   } catch (error) {
-    console.error('Email Error:', error);
+    console.error('❌ sendEmail Error:', error);
+    console.error('❌ sendEmail Error Details:', {
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      response: error.response,
+      responseCode: error.responseCode
+    });
     throw error;
   }
 };
 
-const sendSMS = async ({ destination, message, source = 'TailoredHands' }) => {
+const sendSMS = async ({ destination, message, source }) => {
   try {
     // Get SMS settings from database (use ID=1)
     const settingsResult = await query('SELECT * FROM sms_settings WHERE id = 1');
@@ -54,7 +67,8 @@ const sendSMS = async ({ destination, message, source = 'TailoredHands' }) => {
     const settings = settingsResult.rows[0];
     const username = settings.deywuro_username;
     const password = settings.deywuro_password;
-    const dbSource = settings.deywuro_source;
+    // Always use database source, fallback to 'T-Hands' if not set
+    const dbSource = settings.deywuro_source || 'T-Hands';
     
     if (!username || !password) {
       throw new Error('Deywuro SMS credentials not configured in database');
@@ -80,7 +94,7 @@ const sendSMS = async ({ destination, message, source = 'TailoredHands' }) => {
       username,
       password,
       destination: formattedDestinations,
-      source: dbSource, // Use database source instead of parameter
+      source: dbSource, // Always use database source, never the parameter
       message
     }).toString();
 
@@ -373,12 +387,11 @@ The TailoredHands Team
         const phone = order.shipping_phone || order.customer_phone;
         const customerName = order.shipping_first_name || order.first_name || 'Customer';
         
-        const smsMessage = `Hi ${customerName}! Your TailoredHands order ${order.order_number} has been placed successfully. Total: GH₵${order.base_total}. We'll update you on the progress. Thank you!`;
+        const smsMessage = `Hi ${customerName}! Your TailoredHands order ${order.order_number} has been placed successfully. Total: GHS ${order.base_total}. We'll update you on the progress. Thank you!`;
 
         await sendSMS({
           destination: phone,
-          message: smsMessage,
-          source: 'TailoredHands'
+          message: smsMessage
         });
 
         results.sms = { success: true };
@@ -497,37 +510,61 @@ The TailoredHands Team
     }
 
     // Send SMS notification
-    if (settings.sms_enabled && settings.payment_success_sms && (order.shipping_phone || order.customer_phone)) {
+    const phoneNumber = order.shipping_phone || order.customer_phone;
+    console.log('📱 Payment Success SMS Check (Backend):', {
+      sms_enabled: settings.sms_enabled,
+      payment_success_sms: settings.payment_success_sms,
+      shipping_phone: order.shipping_phone,
+      customer_phone: order.customer_phone,
+      phoneNumber: phoneNumber,
+      hasPhone: !!phoneNumber
+    });
+
+    if (settings.sms_enabled && settings.payment_success_sms && phoneNumber) {
       try {
-        const phone = order.shipping_phone || order.customer_phone;
         const customerName = order.shipping_first_name || order.first_name || 'Customer';
         
         const smsMessage = `Order Confirmed! Your order ${order.order_number} (GHS ${order.base_total}) has been placed and paid successfully. We're preparing it for shipping. Thank you for choosing TailoredHands!`;
 
+        console.log('📱 Sending payment success SMS to:', phoneNumber);
+        console.log('📱 SMS Message:', smsMessage);
+
         await sendSMS({
-          destination: phone,
-          message: smsMessage,
-          source: 'TailoredHands'
+          destination: phoneNumber,
+          message: smsMessage
         });
 
+        console.log('✅ Payment success SMS sent successfully');
         results.sms = { success: true };
 
         // Log notification
         await query(`
           INSERT INTO notification_logs (type, recipient, method, status, order_id, created_at)
           VALUES ($1, $2, $3, $4, $5, NOW())
-        `, ['order_confirmed', phone, 'sms', 'sent', orderId]);
+        `, ['order_confirmed', phoneNumber, 'sms', 'sent', orderId]);
 
       } catch (error) {
-        console.error('Error sending payment success SMS:', error);
+        console.error('❌ Error sending payment success SMS:', error);
+        console.error('❌ SMS Error Details:', {
+          message: error.message,
+          stack: error.stack,
+          phoneNumber: phoneNumber
+        });
         results.sms = { success: false, error: error.message };
 
         // Log failed notification
         await query(`
           INSERT INTO notification_logs (type, recipient, method, status, error_message, order_id, created_at)
           VALUES ($1, $2, $3, $4, $5, $6, NOW())
-        `, ['order_confirmed', order.shipping_phone, 'sms', 'failed', error.message, orderId]);
+        `, ['order_confirmed', phoneNumber, 'sms', 'failed', error.message, orderId]);
       }
+    } else {
+      console.warn('⚠️ SMS not sent - conditions not met:', {
+        sms_enabled: settings.sms_enabled,
+        payment_success_sms: settings.payment_success_sms,
+        hasPhone: !!phoneNumber
+      });
+      results.sms = { success: false, skipped: true, reason: 'Settings disabled or phone number missing' };
     }
 
     console.log('✅ Notifications: Order confirmed & payment successful sent:', results);
@@ -576,17 +613,17 @@ router.post('/send/consultation', async (req, res) => {
     if (settings.email_enabled) {
       try {
         const emailData = {
-          to: consultation.customer_email,
-          subject: `Consultation Request Received - ${consultation.service_type}`,
+          to: consultation.email || consultation.customer_email,
+          subject: `Consultation Request Received - ${consultation.consultation_type || consultation.type || 'Consultation'}`,
           message: `
-Dear ${consultation.first_name},
+Dear ${consultation.name || consultation.first_name || 'Customer'},
 
 Thank you for your consultation request! We have received your request and will get back to you soon.
 
 Consultation Details:
-- Service Type: ${consultation.service_type}
-- Preferred Date: ${consultation.preferred_date}
-- Message: ${consultation.message}
+- Service Type: ${consultation.consultation_type || consultation.type || 'N/A'}
+- Preferred Date: ${consultation.preferred_date || 'N/A'}
+- Message: ${consultation.message || consultation.additional_instructions || 'N/A'}
 
 We'll review your request and contact you within 24 hours to schedule your consultation.
 
@@ -619,14 +656,16 @@ The TailoredHands Team
     }
 
     // Send SMS notification
-    if (settings.sms_enabled && consultation.customer_phone) {
+    const consultationPhone = consultation.phone || consultation.customer_phone;
+    if (settings.sms_enabled && consultationPhone) {
       try {
-        const smsMessage = `Hi ${consultation.first_name}! We've received your consultation request for ${consultation.service_type}. We'll contact you within 24 hours to schedule. Thank you for choosing TailoredHands!`;
+        const consultationName = consultation.name || consultation.first_name || 'Customer';
+        const consultationType = consultation.consultation_type || consultation.type || 'consultation';
+        const smsMessage = `Hi ${consultationName}! We've received your consultation request for ${consultationType}. We'll contact you within 24 hours to schedule. Thank you for choosing TailoredHands!`;
 
         await sendSMS({
-          destination: consultation.customer_phone,
-          message: smsMessage,
-          source: 'TailoredHands'
+          destination: consultationPhone,
+          message: smsMessage
         });
 
         results.sms = { success: true };
@@ -635,7 +674,7 @@ The TailoredHands Team
         await query(`
           INSERT INTO notification_logs (type, recipient, method, status, consultation_id, created_at)
           VALUES ($1, $2, $3, $4, $5, NOW())
-        `, ['consultation_request', consultation.customer_phone, 'sms', 'sent', consultationId]);
+        `, ['consultation_request', consultationPhone, 'sms', 'sent', consultationId]);
 
       } catch (error) {
         console.error('Error sending consultation SMS:', error);
@@ -658,4 +697,430 @@ The TailoredHands Team
   }
 });
 
+// Generic email sending endpoint (for frontend use)
+router.post('/send/email', async (req, res) => {
+  try {
+    console.log('📧 Notifications: Sending generic email');
+
+    const { to, subject, message, from_name, template_type, template_data } = req.body;
+
+    if (!to || !subject) {
+      return res.status(400).json({ error: 'Email recipient (to) and subject are required' });
+    }
+
+    // Build the email message
+    let emailMessage = message || '';
+    
+    // If template_data is provided, use it to build a formatted message
+    if (template_data && Object.keys(template_data).length > 0) {
+      // For payment success template
+      if (template_type === 'payment-success') {
+        emailMessage = `
+Dear ${template_data.customer_name || 'Valued Customer'},
+
+🎉 Your payment has been successfully processed!
+
+📋 Order Details:
+- Order Number: ${template_data.order_number || 'N/A'}
+- Payment Date: ${template_data.payment_date || new Date().toLocaleDateString()}
+- Payment Method: ${template_data.payment_method || 'Card Payment'}
+- Amount Paid: ${template_data.payment_amount || 'N/A'}
+- Transaction ID: ${template_data.transaction_id || 'N/A'}
+
+${template_data.order_items && template_data.order_items.length > 0 ? `
+📦 Items Ordered:
+${template_data.order_items.map(item => `  • ${item.name}${item.size ? ` (${item.size})` : ''} x ${item.quantity} - ${item.price_display}`).join('\n')}
+
+Order Summary:
+  Subtotal: ${template_data.subtotal_display || 'N/A'}
+  Shipping: ${template_data.shipping_display || 'N/A'}
+  Total: ${template_data.total_display || 'N/A'}
+` : ''}
+
+🚚 Estimated Delivery: ${template_data.estimated_delivery_date || 'Within 7-14 business days'}
+
+You can track your order here: ${template_data.order_tracking_url || ''}
+
+Thank you for choosing TailoredHands!
+
+Best regards,
+The TailoredHands Team
+        `.trim();
+      }
+      // For order confirmation template  
+      else if (template_type === 'order-confirmation') {
+        emailMessage = `
+Dear ${template_data.customer_name || 'Valued Customer'},
+
+Thank you for your order! We've received your order and it's being processed.
+
+📋 Order Details:
+- Order Number: ${template_data.order_number || 'N/A'}
+- Order Date: ${template_data.order_date || new Date().toLocaleDateString()}
+- Payment Status: ${template_data.payment_status || 'Pending'}
+
+${template_data.order_items && template_data.order_items.length > 0 ? `
+📦 Items Ordered:
+${template_data.order_items.map(item => `  • ${item.name}${item.size ? ` (${item.size})` : ''} x ${item.quantity} - ${item.price_display}`).join('\n')}
+
+Order Summary:
+  Subtotal: ${template_data.subtotal_display || 'N/A'}
+  Shipping: ${template_data.shipping_display || 'N/A'}
+  Total: ${template_data.total_display || 'N/A'}
+` : ''}
+
+📍 Shipping Address:
+${template_data.shipping_address || ''}, ${template_data.shipping_city || ''}, ${template_data.shipping_state || ''} ${template_data.shipping_postal_code || ''}, ${template_data.shipping_country || ''}
+
+Track your order: ${template_data.order_tracking_url || ''}
+
+Thank you for choosing TailoredHands!
+
+Best regards,
+The TailoredHands Team
+        `.trim();
+      }
+    }
+
+    await sendEmail({
+      to: to,
+      subject: subject,
+      message: emailMessage
+    });
+
+    console.log('✅ Email sent successfully to:', to);
+    res.json({ success: true, message: 'Email sent successfully' });
+
+  } catch (error) {
+    console.error('❌ Email sending error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to send email', 
+      details: error.message 
+    });
+  }
+});
+
+// Generic SMS sending endpoint (for frontend use)
+router.post('/send/sms', async (req, res) => {
+  try {
+    console.log('📱 Notifications: Sending generic SMS');
+
+    const { destination, message, source } = req.body;
+
+    if (!destination || !message) {
+      return res.status(400).json({ error: 'Phone number (destination) and message are required' });
+    }
+
+    await sendSMS({
+      destination: destination,
+      message: message
+      // Source is always taken from database settings, not from parameter
+    });
+
+    console.log('✅ SMS sent successfully to:', destination);
+    res.json({ success: true, message: 'SMS sent successfully' });
+
+  } catch (error) {
+    console.error('❌ SMS sending error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to send SMS', 
+      details: error.message 
+    });
+  }
+});
+
+// Helper function to get admin email addresses
+const getAdminEmails = async () => {
+  try {
+    // Try to get from users table first
+    let result = await query(`
+      SELECT DISTINCT email 
+      FROM users 
+      WHERE role IN ('super_admin', 'admin', 'manager', 'support')
+      AND email IS NOT NULL
+      AND email != ''
+    `);
+    
+    let emails = result.rows.map(row => row.email);
+    
+    // Also check profiles table (for Supabase auth users)
+    try {
+      const profilesResult = await query(`
+        SELECT DISTINCT email 
+        FROM profiles 
+        WHERE role IN ('super_admin', 'admin', 'manager', 'support')
+        AND email IS NOT NULL
+        AND email != ''
+      `);
+      
+      const profileEmails = profilesResult.rows.map(row => row.email);
+      // Merge and deduplicate
+      emails = [...new Set([...emails, ...profileEmails])];
+    } catch (profilesError) {
+      console.warn('⚠️ Could not query profiles table (may not exist):', profilesError.message);
+    }
+    
+    console.log(`📧 Found ${emails.length} admin email(s):`, emails);
+    return emails;
+  } catch (error) {
+    console.error('❌ Error fetching admin emails:', error);
+    return [];
+  }
+};
+
+// Helper function to send admin order notification (can be called directly or via route)
+const sendAdminOrderNotification = async (orderId) => {
+  try {
+    console.log('📧 Admin Order Notification: Processing order:', orderId);
+
+    // Get order details with items
+    const orderResult = await query(`
+      SELECT 
+        o.*,
+        c.first_name, c.last_name, c.email as customer_email, c.phone as customer_phone,
+        STRING_AGG(
+          oi.quantity || 'x ' || COALESCE(p.name, gvt.name, 'Item') || 
+          CASE WHEN oi.size IS NOT NULL THEN ' (Size: ' || oi.size || ')' ELSE '' END ||
+          ' - $' || (oi.price * oi.quantity)::text,
+          E'\n'
+        ) as items_summary
+      FROM orders o
+      LEFT JOIN customers c ON o.customer_id = c.id
+      LEFT JOIN order_items oi ON o.id = oi.order_id
+      LEFT JOIN products p ON oi.product_id = p.id
+      LEFT JOIN gift_voucher_types gvt ON oi.gift_voucher_type_id = gvt.id
+      WHERE o.id = $1
+      GROUP BY o.id, c.id
+    `, [orderId]);
+
+    if (orderResult.rows.length === 0) {
+      throw new Error('Order not found');
+    }
+
+    const order = orderResult.rows[0];
+    console.log('📧 Admin Order Notification: Fetching admin emails...');
+    const adminEmails = await getAdminEmails();
+
+    if (adminEmails.length === 0) {
+      console.warn('⚠️ No admin emails found, skipping admin notification');
+      return { success: true, message: 'No admin emails configured', sent: 0 };
+    }
+
+    const customerName = `${order.shipping_first_name || order.first_name || ''} ${order.shipping_last_name || order.last_name || ''}`.trim() || 'Customer';
+    
+    const emailBody = `
+🛒 NEW ORDER RECEIVED
+
+Order Details:
+- Order Number: ${order.order_number}
+- Order Date: ${new Date(order.created_at).toLocaleString()}
+- Customer: ${customerName}
+- Email: ${order.shipping_email || order.customer_email || 'N/A'}
+- Phone: ${order.shipping_phone || order.customer_phone || 'N/A'}
+
+Payment:
+- Status: ${order.payment_status}
+- Method: ${order.payment_method || 'N/A'}
+- Amount: $${order.base_total || 0}
+- Reference: ${order.payment_reference || 'N/A'}
+
+Shipping Address:
+${order.shipping_address || 'N/A'}
+${order.shipping_city || ''}, ${order.shipping_state || ''} ${order.shipping_postal_code || ''}
+${order.shipping_country || ''}
+
+Order Items:
+${order.items_summary || 'No items found'}
+
+Subtotal: $${order.base_subtotal || 0}
+Shipping: $${order.base_shipping || 0}
+Total: $${order.base_total || 0}
+
+View full order: ${process.env.FRONTEND_URL || 'http://localhost:5173'}/admin/orders/${order.id}
+    `;
+
+    console.log(`📧 Admin Order Notification: Sending to ${adminEmails.length} admin(s):`, adminEmails);
+
+    // Send to all admins
+    const emailResults = [];
+    for (const email of adminEmails) {
+      try {
+        console.log(`📧 Sending admin order notification to: ${email}`);
+        const result = await sendEmail({
+          to: email,
+          subject: `🛒 New Order: ${order.order_number}`,
+          message: emailBody
+        });
+        console.log(`✅ Admin order notification sent successfully to ${email}`);
+        emailResults.push({ email, success: true, result });
+      } catch (err) {
+        console.error(`❌ Failed to send admin notification to ${email}:`, err);
+        emailResults.push({ email, success: false, error: err.message });
+      }
+    }
+
+    const successCount = emailResults.filter(r => r.success).length;
+    console.log(`✅ Admin order notification: ${successCount}/${adminEmails.length} sent successfully`);
+    return { 
+      success: true, 
+      message: `Notification sent to ${successCount}/${adminEmails.length} admin(s)`,
+      sent: successCount,
+      total: adminEmails.length,
+      results: emailResults
+    };
+
+  } catch (error) {
+    console.error('❌ Admin order notification error:', error);
+    throw error;
+  }
+};
+
+// Send admin notification for new order (HTTP route)
+router.post('/send/admin/order', async (req, res) => {
+  try {
+    console.log('📧 Admin Order Notification: Request received', req.body);
+    const { orderId } = req.body;
+    if (!orderId) {
+      console.error('❌ Admin Order Notification: Order ID missing');
+      return res.status(400).json({ error: 'Order ID is required' });
+    }
+
+    const result = await sendAdminOrderNotification(orderId);
+    res.json(result);
+
+  } catch (error) {
+    console.error('❌ Admin order notification error:', error);
+    res.status(500).json({ error: 'Failed to send admin notification', details: error.message });
+  }
+});
+
+// Send admin notification for new consultation
+router.post('/send/admin/consultation', async (req, res) => {
+  try {
+    const { consultationId } = req.body;
+    if (!consultationId) {
+      return res.status(400).json({ error: 'Consultation ID is required' });
+    }
+
+    const consultationResult = await query(`
+      SELECT * FROM consultations WHERE id = $1
+    `, [consultationId]);
+
+    if (consultationResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Consultation not found' });
+    }
+
+    const consultation = consultationResult.rows[0];
+    const adminEmails = await getAdminEmails();
+
+    if (adminEmails.length === 0) {
+      console.warn('⚠️ No admin emails found, skipping admin notification');
+      return res.json({ success: true, message: 'No admin emails configured' });
+    }
+
+    const emailBody = `
+📅 NEW CONSULTATION REQUEST
+
+Details:
+- Name: ${consultation.name || consultation.first_name || 'N/A'}
+- Email: ${consultation.email || 'N/A'}
+- Phone: ${consultation.phone || 'N/A'}
+- Type: ${consultation.type || 'N/A'}
+- Service: ${consultation.consultation_type || consultation.type || 'N/A'}
+- Date: ${consultation.preferred_date ? new Date(consultation.preferred_date).toLocaleDateString() : 'N/A'}
+- Time: ${consultation.preferred_time || 'N/A'}
+- Status: ${consultation.status || 'pending'}
+
+${consultation.message ? `Message:\n${consultation.message}` : ''}
+
+View consultation: ${process.env.FRONTEND_URL || 'http://localhost:5173'}/admin/consultations/${consultation.id}
+    `;
+
+    const emailPromises = adminEmails.map(email => 
+      sendEmail({
+        to: email,
+        subject: `📅 New Consultation Request: ${consultation.name || consultation.first_name || 'Customer'}`,
+        message: emailBody
+      }).catch(err => {
+        console.error(`Failed to send admin notification to ${email}:`, err);
+        return null;
+      })
+    );
+
+    await Promise.all(emailPromises);
+    console.log(`✅ Admin consultation notification sent to ${adminEmails.length} admin(s)`);
+    res.json({ success: true, message: `Notification sent to ${adminEmails.length} admin(s)` });
+
+  } catch (error) {
+    console.error('❌ Admin consultation notification error:', error);
+    res.status(500).json({ error: 'Failed to send admin notification', details: error.message });
+  }
+});
+
+// Send admin notification for new message
+router.post('/send/admin/message', async (req, res) => {
+  try {
+    const { messageId } = req.body;
+    if (!messageId) {
+      return res.status(400).json({ error: 'Message ID is required' });
+    }
+
+    const messageResult = await query(`
+      SELECT * FROM messages WHERE id = $1
+    `, [messageId]);
+
+    if (messageResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    const message = messageResult.rows[0];
+    const adminEmails = await getAdminEmails();
+
+    if (adminEmails.length === 0) {
+      console.warn('⚠️ No admin emails found, skipping admin notification');
+      return res.json({ success: true, message: 'No admin emails configured' });
+    }
+
+    const emailBody = `
+💬 NEW MESSAGE RECEIVED
+
+From:
+- Name: ${message.name || 'N/A'}
+- Email: ${message.email || 'N/A'}
+- Phone: ${message.phone || 'N/A'}
+
+Message:
+${message.message || 'N/A'}
+
+Received: ${new Date(message.created_at).toLocaleString()}
+
+View message: ${process.env.FRONTEND_URL || 'http://localhost:5173'}/admin/messages/${message.id}
+    `;
+
+    const emailPromises = adminEmails.map(email => 
+      sendEmail({
+        to: email,
+        subject: `💬 New Message from ${message.name || 'Customer'}`,
+        message: emailBody
+      }).catch(err => {
+        console.error(`Failed to send admin notification to ${email}:`, err);
+        return null;
+      })
+    );
+
+    await Promise.all(emailPromises);
+    console.log(`✅ Admin message notification sent to ${adminEmails.length} admin(s)`);
+    res.json({ success: true, message: `Notification sent to ${adminEmails.length} admin(s)` });
+
+  } catch (error) {
+    console.error('❌ Admin message notification error:', error);
+    res.status(500).json({ error: 'Failed to send admin notification', details: error.message });
+  }
+});
+
+// Export helper functions for direct use
 module.exports = router;
+module.exports.sendAdminOrderNotification = sendAdminOrderNotification;
+module.exports.getAdminEmails = getAdminEmails;

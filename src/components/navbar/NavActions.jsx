@@ -1,5 +1,5 @@
 
-import React from "react";
+import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Heart, User, ShoppingCart, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,11 +9,13 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
-import { CurrencySelect } from "@/components/ui/currency-select";
+import BranchSelector from "@/components/navbar/BranchSelector";
+// Currency selector moved to FloatingRegionSelector
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/use-toast";
 import { useShop } from "@/context/ShopContext";
 import { useCartState } from "@/context/ShopContext/cartState";
+import CartDrawer from "@/components/cart/CartDrawer";
 
 const NavActions = () => {
   const { user, logout } = useAuth();
@@ -21,6 +23,7 @@ const NavActions = () => {
   const { toast } = useToast();
   const { cart, wishlist } = useShop();
   const { cartItemsCount } = useCartState(cart || []);
+  const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -42,7 +45,8 @@ const NavActions = () => {
 
   return (
     <div className="flex items-center space-x-1">
-      <CurrencySelect />
+      <BranchSelector />
+      {/* Currency selector moved to FloatingRegionSelector */}
       {/* Desktop Nav Actions - Hidden on mobile, shown on md and up */}
       <div className="hidden md:flex items-center space-x-1">
         
@@ -89,17 +93,22 @@ const NavActions = () => {
             )}
           </Button>
         </Link>
-        <Link to="/cart">
-          <Button variant="ghost" size="icon" className="h-9 w-9 relative">
-            <ShoppingCart className="h-5 w-5" />
-            {cartItemsCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-[#D2B48C] text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
-                {cartItemsCount}
-              </span>
-            )}
-          </Button>
-        </Link>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-9 w-9 relative"
+          onClick={() => setCartDrawerOpen(true)}
+        >
+          <ShoppingCart className="h-5 w-5" />
+          {cartItemsCount > 0 && (
+            <span className="absolute -top-1 -right-1 bg-[#D2B48C] text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+              {cartItemsCount}
+            </span>
+          )}
+        </Button>
       </div>
+
+      <CartDrawer open={cartDrawerOpen} onOpenChange={setCartDrawerOpen} />
     </div>
   );
 };

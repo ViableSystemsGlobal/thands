@@ -1,6 +1,7 @@
 
 import React, { Suspense } from "react";
 import { Outlet } from "react-router-dom";
+import { ShopProvider } from "@/context/ShopContext";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import SearchDialog from "@/components/ui/search-dialog";
@@ -8,14 +9,16 @@ import BottomMobileNav from "@/components/navbar/BottomMobileNav";
 import ChatbotWebSocket from "@/components/ChatbotWebSocket";
 import CookieConsent from "@/components/CookieConsent";
 import NewsletterPopup from "@/components/NewsletterPopup";
+import FloatingRegionSelector from "@/components/ui/FloatingRegionSelector";
 
 const NAVBAR_HEIGHT_APPROX = "80px"; 
 const BOTTOM_NAV_HEIGHT_APPROX = "72px";
 
 const MainLayout = () => {
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      <Navbar />
+    <ShopProvider>
+      <div className="min-h-screen flex flex-col bg-background">
+        <Navbar />
       <SearchDialog />
       <main 
         className="flex-1 w-full"
@@ -37,7 +40,9 @@ const MainLayout = () => {
       <ChatbotWebSocket />
       <CookieConsent />
       <NewsletterPopup />
-    </div>
+      <FloatingRegionSelector />
+      </div>
+    </ShopProvider>
   );
 };
 

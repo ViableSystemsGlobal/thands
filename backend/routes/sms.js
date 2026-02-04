@@ -9,7 +9,7 @@ const DEYWURO_CONFIG = {
   // These should be stored in environment variables
   defaultUsername: process.env.DEYWURO_USERNAME || '',
   defaultPassword: process.env.DEYWURO_PASSWORD || '',
-  defaultSource: 'TailoredHands'
+  defaultSource: 'T-Hands'
 };
 
 /**
@@ -110,7 +110,7 @@ router.post('/test', async (req, res) => {
   try {
     console.log('📱 SMS Test: Testing SMS configuration');
     
-    const { destination, message = 'Test SMS from TailoredHands' } = req.body;
+    const { destination, message = 'Test SMS from TailoredH' } = req.body;
     
     if (!destination) {
       return res.status(400).json({ 
@@ -158,7 +158,7 @@ router.post('/send', authenticateToken, async (req, res) => {
 
     console.log('✅ SMS Send: Admin access confirmed');
 
-    const { destination, message, source, username, password } = req.body;
+    const { destination, message, source } = req.body;
 
     if (!destination || !message) {
       return res.status(400).json({ 
@@ -166,13 +166,24 @@ router.post('/send', authenticateToken, async (req, res) => {
       });
     }
 
-    // Use provided credentials or defaults
+    // Get SMS settings from database
+    const settingsResult = await query('SELECT * FROM sms_settings WHERE id = 1');
+    
+    if (settingsResult.rows.length === 0 || !settingsResult.rows[0].deywuro_username || !settingsResult.rows[0].deywuro_password) {
+      return res.status(400).json({ 
+        error: 'SMS settings not configured. Please configure SMS settings first.' 
+      });
+    }
+
+    const settings = settingsResult.rows[0];
+
+    // Use database credentials
     const smsData = {
       destination,
       message,
-      source: source || DEYWURO_CONFIG.defaultSource,
-      username: username || DEYWURO_CONFIG.defaultUsername,
-      password: password || DEYWURO_CONFIG.defaultPassword
+      source: settings.deywuro_source || 'T-Hands', // Always use database source
+      username: settings.deywuro_username,
+      password: settings.deywuro_password
     };
 
     console.log('📱 SMS Send: Sending SMS...', {
@@ -322,7 +333,7 @@ router.post('/settings', async (req, res) => {
         SET deywuro_username = $1, deywuro_password = $2, deywuro_source = $3, updated_at = NOW()
         WHERE id = 1
         RETURNING *
-      `, [deywuro_username, deywuro_password, deywuro_source || 'TailoredHands']);
+      `, [deywuro_username, deywuro_password, deywuro_source || 'T-Hands']);
       
       if (result.rows.length === 0) {
         // No record with ID=1 exists, create it
@@ -330,7 +341,7 @@ router.post('/settings', async (req, res) => {
           INSERT INTO sms_settings (id, deywuro_username, deywuro_password, deywuro_source, created_at, updated_at)
           VALUES (1, $1, $2, $3, NOW(), NOW())
           RETURNING *
-        `, [deywuro_username, deywuro_password, deywuro_source || 'TailoredHands']);
+        `, [deywuro_username, deywuro_password, deywuro_source || 'T-Hands']);
       }
     } catch (error) {
       // If there's an error, create a new record
@@ -338,7 +349,7 @@ router.post('/settings', async (req, res) => {
         INSERT INTO sms_settings (deywuro_username, deywuro_password, deywuro_source, created_at, updated_at)
         VALUES ($1, $2, $3, NOW(), NOW())
         RETURNING *
-      `, [deywuro_username, deywuro_password, deywuro_source || 'TailoredHands']);
+      `, [deywuro_username, deywuro_password, deywuro_source || 'T-Hands']);
     }
 
     console.log('✅ SMS Settings: Settings saved successfully');
@@ -366,7 +377,7 @@ router.get('/settings', async (req, res) => {
         data: {
           deywuro_username: '',
           deywuro_password: '',
-          deywuro_source: 'TailoredHands'
+          deywuro_source: 'T-Hands'
         }
       });
     }

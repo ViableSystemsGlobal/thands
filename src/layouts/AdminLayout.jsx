@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Outlet, Navigate, useLocation } from 'react-router-dom';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
+import { AdminBranchProvider } from '@/context/AdminBranchContext';
 import AdminSidebar from '@/components/admin/AdminSidebar';
 import AdminNavbar from '@/components/admin/AdminNavbar';
 import { useToast } from '@/components/ui/use-toast';
@@ -101,39 +102,41 @@ const AdminLayout = () => {
   // If user is authenticated and admin, show admin panel
   if (isAuthenticated && isAdmin) {
     return (
-      <div className="flex h-screen bg-slate-100">
-        {/* Desktop Sidebar */}
-        <div className="hidden md:block">
-          <AdminSidebar 
-            onLogout={handleLogout}
-            onLinkClick={handleSidebarLinkClick}
-          />
-        </div>
-
-        {/* Mobile Sidebar Overlay */}
-        {isMobileMenuOpen && (
-          <div className="fixed inset-0 z-50 md:hidden">
-            <div 
-              className="absolute inset-0 bg-black/50" 
-              onClick={() => setIsMobileMenuOpen(false)}
+      <AdminBranchProvider>
+        <div className="flex h-screen bg-slate-100">
+          {/* Desktop Sidebar */}
+          <div className="hidden md:block">
+            <AdminSidebar 
+              onLogout={handleLogout}
+              onLinkClick={handleSidebarLinkClick}
             />
-            <div className="relative w-64 h-full">
-              <AdminSidebar 
-                onLogout={handleLogout}
-                onLinkClick={handleSidebarLinkClick}
-              />
-            </div>
           </div>
-        )}
 
-        {/* Main Content Area */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <AdminNavbar onMobileMenuToggle={handleMobileMenuToggle} />
-          <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 bg-gradient-to-br from-slate-50 to-gray-100">
-            <Outlet />
-          </main>
+          {/* Mobile Sidebar Overlay */}
+          {isMobileMenuOpen && (
+            <div className="fixed inset-0 z-50 md:hidden">
+              <div 
+                className="absolute inset-0 bg-black/50" 
+                onClick={() => setIsMobileMenuOpen(false)}
+              />
+              <div className="relative w-64 h-full">
+                <AdminSidebar 
+                  onLogout={handleLogout}
+                  onLinkClick={handleSidebarLinkClick}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Main Content Area */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <AdminNavbar onMobileMenuToggle={handleMobileMenuToggle} />
+            <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 bg-gradient-to-br from-slate-50 to-gray-100">
+              <Outlet />
+            </main>
+          </div>
         </div>
-      </div>
+      </AdminBranchProvider>
     );
   }
 

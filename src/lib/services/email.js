@@ -1,6 +1,6 @@
-import { supabase } from '@/lib/supabase';
+import { api, API_BASE_URL } from '@/lib/services/api';
 
-// Enhanced email service using Supabase Edge Function with HTML templates
+// Enhanced email service using Backend API with HTML templates
 export async function sendEmail({ 
   to, 
   subject, 
@@ -10,22 +10,28 @@ export async function sendEmail({
   template_data = {} 
 }) {
   try {
-    console.log(`📧 Sending email via ${template_type} template...`);
+    console.log(`📧 Sending email via backend API (${template_type} template)...`);
 
-    // Call the Supabase Edge Function with template support
-    const { data, error } = await supabase.functions.invoke('send-email', {
-      body: {
+    // Call the backend API email endpoint
+    const response = await fetch(`${API_BASE_URL}/notifications/send/email`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
         to: to,
         subject: subject,
         message: message,
         from_name: from_name || 'TailoredHands',
         template_type: template_type,
         template_data: template_data
-      }
+      })
     });
 
-    if (error) {
-      throw new Error(error.message || 'Edge Function error');
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || `HTTP ${response.status}: Email sending failed`);
     }
 
     if (!data.success) {
@@ -43,8 +49,13 @@ export async function sendEmail({
 
 // Helper function to send order confirmation email
 export async function sendOrderConfirmationEmail(orderData) {
+  // Get customer name from multiple possible sources
+  const customerFirstName = orderData.customers?.first_name || orderData.shipping_first_name || orderData.first_name || '';
+  const customerLastName = orderData.customers?.last_name || orderData.shipping_last_name || orderData.last_name || '';
+  const customerName = `${customerFirstName} ${customerLastName}`.trim() || 'Valued Customer';
+
   const templateData = {
-    customer_name: `${orderData.customers?.first_name} ${orderData.customers?.last_name}`.trim() || 'Valued Customer',
+    customer_name: customerName,
     order_number: orderData.order_number,
     order_date: new Date(orderData.created_at).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -83,8 +94,13 @@ export async function sendPaymentSuccessEmail(orderData, paymentDetails) {
   const estimatedDelivery = new Date();
   estimatedDelivery.setDate(estimatedDelivery.getDate() + 10); // 10 days from now
 
+  // Get customer name from multiple possible sources
+  const customerFirstName = orderData.customers?.first_name || orderData.shipping_first_name || orderData.first_name || '';
+  const customerLastName = orderData.customers?.last_name || orderData.shipping_last_name || orderData.last_name || '';
+  const customerName = `${customerFirstName} ${customerLastName}`.trim() || 'Valued Customer';
+
   const templateData = {
-    customer_name: `${orderData.customers?.first_name} ${orderData.customers?.last_name}`.trim() || 'Valued Customer',
+    customer_name: customerName,
     order_number: orderData.order_number,
     payment_date: new Date().toLocaleDateString('en-US', {
       year: 'numeric',

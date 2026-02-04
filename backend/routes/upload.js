@@ -32,8 +32,8 @@ router.post('/single', authenticateToken, upload.single('image'), async (req, re
   }
 });
 
-// Upload multiple images
-router.post('/multiple', authenticateToken, upload.array('images', 5), async (req, res) => {
+// Upload multiple images (increased limit to 50 for bulk uploads)
+router.post('/multiple', authenticateToken, upload.array('images', 50), async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ error: 'No image files provided' });

@@ -2,11 +2,13 @@ import React, { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { Plus, Pencil, Trash, Search, Package, Star, TrendingUp, Loader2, Download, Upload, Trash2, FileDown, Shirt, Ruler } from "lucide-react";
+import { Plus, Pencil, Trash, Search, Package, Star, TrendingUp, Loader2, Download, Upload, Trash2, FileDown, Shirt, Ruler, Image, ImageIcon } from "lucide-react";
 import { getProducts, createProduct, updateProduct, deleteProduct, getProductMetrics } from "@/lib/services/adminApi";
 import ProductDialog from "@/components/admin/ProductDialog";
+import BulkImageUploadDialog from "@/components/admin/BulkImageUploadDialog";
 import { Checkbox } from "@/components/ui/checkbox";
-import { exportToCSV, fetchProductsForExport, getProductTemplateData } from "@/lib/export";
+import { exportToCSV, fetchProductsForExport, getProductTemplateData, exportProductImages, downloadProductImagesAsZip } from "@/lib/export";
+import adminApiClient from "@/lib/services/adminApiClient";
 import PaginationControls from "@/components/admin/PaginationControls";
 import { getImageUrl, getPlaceholderImageUrl } from "@/lib/utils/imageUtils";
 import { useCurrency } from "@/context/CurrencyContext";
@@ -200,6 +202,9 @@ const ProductsContent = () => {
   const [productToDelete, setProductToDelete] = useState(null);
   const [selectedProducts, setSelectedProducts] = useState([]);
   const [isExporting, setIsExporting] = useState(false);
+  const [isExportingImages, setIsExportingImages] = useState(false);
+  const [isUploadingImages, setIsUploadingImages] = useState(false);
+  const [isBulkUploadDialogOpen, setIsBulkUploadDialogOpen] = useState(false);
   
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE_OPTIONS[0]);
@@ -390,6 +395,49 @@ const ProductsContent = () => {
     }
   };
 
+  const handleExportImages = async () => {
+    setIsExportingImages(true);
+    try {
+      const imageData = await exportProductImages(searchQuery);
+      exportToCSV(imageData, 'product_images');
+      toast({ title: "Success", description: "Product images list exported successfully" });
+    } catch (error) {
+      console.error("Error exporting product images:", error);
+      toast({ title: "Error", description: "Failed to export product images", variant: "destructive" });
+    } finally {
+      setIsExportingImages(false);
+    }
+  };
+
+  const handleDownloadImagesZip = async () => {
+    setIsExportingImages(true);
+    try {
+      const result = await downloadProductImagesAsZip(searchQuery);
+      toast({ 
+        title: "Success", 
+        description: `Downloaded ${result.downloadedCount} images${result.failedCount > 0 ? `, ${result.failedCount} failed` : ''}` 
+      });
+    } catch (error) {
+      console.error("Error downloading images:", error);
+      toast({ 
+        title: "Error", 
+        description: error.message || "Failed to download images. Make sure JSZip is installed.", 
+        variant: "destructive" 
+      });
+    } finally {
+      setIsExportingImages(false);
+    }
+  };
+
+  const handleBulkImageUpload = () => {
+    setIsBulkUploadDialogOpen(true);
+  };
+
+  const handleBulkUploadComplete = async () => {
+    // Refresh products after images are assigned
+    await fetchProductsCallback();
+  };
+
   const handleAdd = () => {
     setSelectedProduct(null);
     setIsDialogOpen(true);
@@ -462,6 +510,32 @@ const ProductsContent = () => {
               <Button variant="outline" onClick={handleExport} disabled={isExporting} className="text-indigo-600 border-indigo-600 hover:bg-indigo-50">
                 {isExporting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Download className="w-4 h-4 mr-2" />} Export
               </Button>
+              <Button 
+                variant="outline" 
+                onClick={handleExportImages} 
+                disabled={isExportingImages} 
+                className="text-indigo-600 border-indigo-600 hover:bg-indigo-50"
+                title="Export image URLs as CSV"
+              >
+                {isExportingImages ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ImageIcon className="w-4 h-4 mr-2" />} Export Images
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={handleDownloadImagesZip} 
+                disabled={isExportingImages} 
+                className="text-indigo-600 border-indigo-600 hover:bg-indigo-50"
+                title="Download all images as ZIP"
+              >
+                {isExportingImages ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Image className="w-4 h-4 mr-2" />} Download Images
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={handleBulkImageUpload} 
+                className="text-indigo-600 border-indigo-600 hover:bg-indigo-50"
+                title="Upload multiple images and assign to products"
+              >
+                <Upload className="w-4 h-4 mr-2" /> Upload Images
+              </Button>
               <Button className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white" onClick={handleAdd}>
                 <Plus className="w-4 h-4 mr-2" /> Add Product
               </Button>
@@ -501,6 +575,13 @@ const ProductsContent = () => {
           onSelectAll={toggleSelectAll}
           loading={loading}
         />
+
+        {/* Bulk Image Upload Dialog */}
+        <BulkImageUploadDialog
+          isOpen={isBulkUploadDialogOpen}
+          onOpenChange={setIsBulkUploadDialogOpen}
+          onComplete={handleBulkUploadComplete}
+        />
         
         <PaginationControls
           currentPage={currentPage}
@@ -530,6 +611,13 @@ const ProductsContent = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Bulk Image Upload Dialog */}
+      <BulkImageUploadDialog
+        isOpen={isBulkUploadDialogOpen}
+        onOpenChange={setIsBulkUploadDialogOpen}
+        onComplete={handleBulkUploadComplete}
+      />
     </div>
   );
 };

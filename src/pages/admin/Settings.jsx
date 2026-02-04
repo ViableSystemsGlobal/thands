@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Save, Loader2, AlertCircle, CheckCircle, Settings as SettingsIcon, Store, DollarSign, CreditCard, Shield, Image, Users, Database, ShieldCheck, Plus, Trash2, Upload, X, Layers } from 'lucide-react';
+import { Save, Loader2, AlertCircle, CheckCircle, Settings as SettingsIcon, Store, DollarSign, CreditCard, Shield, Image, Users, Database, ShieldCheck, Plus, Trash2, Upload, X, Mail, Truck, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,6 +19,7 @@ import { useAdminAuth } from '@/hooks/useAdminAuth';
 import AdminUserForm from '@/components/admin/users/AdminUserForm';
 import AdminUsersList from '@/components/admin/users/AdminUsersList';
 import adminUsersApi from '@/lib/services/adminUsersApi';
+import GoogleAddressAutocomplete from '@/components/checkout/GoogleAddressAutocomplete';
 
 const SettingsNew = () => {
   const { toast } = useToast();
@@ -36,6 +37,7 @@ const SettingsNew = () => {
     currency: 'USD',
     timezone: 'UTC',
     exchange_rate: 16.0,
+    exchange_rate_gbp: 0.79,
     paystack_public_key: '',
     paystack_secret_key: '',
     hero_image_url: '',
@@ -45,7 +47,8 @@ const SettingsNew = () => {
     navbar_logo_url: '',
     footer_logo_url: '',
     favicon_url: '',
-    captcha_enabled: false
+    captcha_enabled: false,
+    google_places_api_key: ''
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -66,6 +69,37 @@ const SettingsNew = () => {
   const [savingCollections, setSavingCollections] = useState(false);
   const [uploadingCollection, setUploadingCollection] = useState({});
 
+  // Email settings state
+  const [emailSettings, setEmailSettings] = useState({
+    smtp_host: '',
+    smtp_port: 587,
+    smtp_username: '',
+    smtp_password: '',
+    smtp_from_email: '',
+    smtp_from_name: '',
+    smtp_secure: false
+  });
+  const [savingEmailSettings, setSavingEmailSettings] = useState(false);
+
+  // DHL Shipping settings state
+  const [shippingSettings, setShippingSettings] = useState({
+    dhl_api_key: '',
+    dhl_api_secret: '',
+    dhl_account_number: '',
+    dhl_base_url: 'https://express.api.dhl.com/mydhlapi/test',
+    dhl_from_name: 'TailoredHands',
+    dhl_from_street: '123 Business Street',
+    dhl_from_city: 'Accra',
+    dhl_from_state: 'Greater Accra',
+    dhl_from_zip: '00233',
+    dhl_from_country: 'GH'
+  });
+  const [savingShippingSettings, setSavingShippingSettings] = useState(false);
+
+  // MyDHL test state
+  const [testingDhl, setTestingDhl] = useState(false);
+  const [dhlTestResult, setDhlTestResult] = useState(null);
+
   // Debug collections state
   useEffect(() => {
     console.log('📊 Collections state changed:', collections);
@@ -75,6 +109,27 @@ const SettingsNew = () => {
   useEffect(() => {
     if (activeSection === 'users') {
       loadAdminUsers();
+    }
+  }, [activeSection]);
+
+  // Load email settings when email section is active
+  useEffect(() => {
+    if (activeSection === 'email') {
+      loadEmailSettings();
+    }
+  }, [activeSection]);
+
+  // Load shipping settings when shipping section is active
+  useEffect(() => {
+    if (activeSection === 'shipping') {
+      loadShippingSettings();
+    }
+  }, [activeSection]);
+
+  // Load email template when email-template section is active
+  useEffect(() => {
+    if (activeSection === 'email-template') {
+      loadEmailTemplate();
     }
   }, [activeSection]);
 
@@ -94,6 +149,7 @@ const SettingsNew = () => {
             currency: response.settings.currency || 'USD',
             timezone: response.settings.timezone || 'UTC',
             exchange_rate: response.settings.exchange_rate_ghs || 16.0,
+            exchange_rate_gbp: response.settings.exchange_rate_gbp || 0.79,
             paystack_public_key: response.settings.paystack_public_key || '',
             paystack_secret_key: response.settings.paystack_secret_key || '',
             hero_image_url: response.settings.hero_image_url || '',
@@ -103,7 +159,8 @@ const SettingsNew = () => {
             navbar_logo_url: response.settings.navbar_logo_url || '',
             footer_logo_url: response.settings.footer_logo_url || '',
             favicon_url: response.settings.favicon_url || '',
-            captcha_enabled: response.settings.captcha_enabled || false
+            captcha_enabled: response.settings.captcha_enabled || false,
+            google_places_api_key: response.settings.google_places_api_key || ''
           });
         }
       } catch (error) {
@@ -124,6 +181,21 @@ const SettingsNew = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
+      console.log('🔍 handleSave called with settings:', settings);
+      console.log('🔍 google_places_api_key value:', settings.google_places_api_key);
+      
+      // Save Google Places API key separately if it exists
+      if (settings.google_places_api_key) {
+        try {
+          await adminApiClient.put('/admin/settings/google-places-api-key', {
+            google_places_api_key: settings.google_places_api_key
+          });
+          console.log('✅ Google Places API key saved successfully');
+        } catch (error) {
+          console.error('❌ Error saving Google Places API key:', error);
+        }
+      }
+
       const settingsToSave = {
         store_name: settings.store_name,
         contact_email: settings.contact_email,
@@ -133,6 +205,7 @@ const SettingsNew = () => {
         currency: settings.currency,
         timezone: settings.timezone,
         exchange_rate_ghs: parseFloat(settings.exchange_rate),
+        exchange_rate_gbp: parseFloat(settings.exchange_rate_gbp) || 0.79,
         paystack_public_key: settings.paystack_public_key,
         paystack_secret_key: settings.paystack_secret_key,
         hero_image_url: settings.hero_image_url,
@@ -145,6 +218,13 @@ const SettingsNew = () => {
         captcha_enabled: settings.captcha_enabled
       };
 
+      console.log('🔍 Frontend sending to backend:', {
+        paystack_public_key: settingsToSave.paystack_public_key ? 'SET' : 'NOT SET',
+        paystack_secret_key: settingsToSave.paystack_secret_key ? 'SET' : 'NOT SET',
+        actual_public_key: settingsToSave.paystack_public_key,
+        actual_secret_key: settingsToSave.paystack_secret_key
+      });
+
       const response = await adminSettingsApi.updateSettings(settingsToSave);
       if (response.success) {
           toast({
@@ -153,13 +233,22 @@ const SettingsNew = () => {
         variant: "default",
       });
 
-        // SIMPLE SOLUTION: Refresh all prices everywhere
-        await refreshAllPrices();
-        
-        // Update favicon if favicon_url was changed
-        if (settings.favicon_url) {
-          updateFavicon(settings.favicon_url);
+        // SIMPLE SOLUTION: Refresh all prices everywhere (but don't reload page for API keys)
+        if (settings.google_places_api_key || settings.paystack_public_key || settings.paystack_secret_key) {
+          console.log('🔄 Skipping page reload for API keys save');
+        } else {
+          await refreshAllPrices();
         }
+        
+        // Update favicon immediately after save (use saved value from response or current state)
+        const savedFaviconUrl = response.settings?.favicon_url || settings.favicon_url;
+        console.log('🎨 Updating favicon with URL:', savedFaviconUrl);
+        updateFavicon(savedFaviconUrl);
+        
+        // Force a page refresh of the favicon by triggering a small delay and re-update
+        setTimeout(() => {
+          updateFavicon(savedFaviconUrl);
+        }, 100);
       } else {
         throw new Error(response.error || 'Failed to save settings');
       }
@@ -243,6 +332,185 @@ const SettingsNew = () => {
     });
   };
 
+  // Email settings functions
+  const loadEmailSettings = async () => {
+    if (activeSection !== 'email') return;
+    
+    try {
+      const response = await adminApiClient.get('/email/settings');
+      console.log('🔍 Email settings response:', response);
+      const data = response.data || response;
+      console.log('🔍 Email settings data:', data);
+      
+      if (data && data.data) {
+        console.log('🔍 Email settings nested data:', data.data);
+        setEmailSettings({
+          smtp_host: data.data.host || '',
+          smtp_port: data.data.port || 587,
+          smtp_username: data.data.user || '',
+          smtp_password: data.data.pass || '',
+          smtp_from_email: data.data.from_email || '',
+          smtp_from_name: data.data.from_name || '',
+          smtp_secure: data.data.port === 465
+        });
+      } else {
+        console.log('🔍 No nested data found, trying direct access');
+        setEmailSettings({
+          smtp_host: data.host || '',
+          smtp_port: data.port || 587,
+          smtp_username: data.user || '',
+          smtp_password: data.pass || '',
+          smtp_from_email: data.from_email || '',
+          smtp_from_name: data.from_name || '',
+          smtp_secure: data.port === 465
+        });
+      }
+    } catch (error) {
+      console.error('Error loading email settings:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load email settings",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const saveEmailSettings = async () => {
+    setSavingEmailSettings(true);
+    try {
+      const settingsToSave = {
+        smtp_host: emailSettings.smtp_host,
+        smtp_port: emailSettings.smtp_port,
+        smtp_username: emailSettings.smtp_username,
+        smtp_password: emailSettings.smtp_password,
+        smtp_from_email: emailSettings.smtp_from_email,
+        smtp_from_name: emailSettings.smtp_from_name,
+        smtp_secure: emailSettings.smtp_secure
+      };
+
+      await adminApiClient.put('/email/settings', settingsToSave);
+      
+      toast({
+        title: "Settings Saved",
+        description: "Email settings have been updated successfully.",
+        className: "bg-green-50 border-green-200 text-green-700",
+      });
+    } catch (error) {
+      console.error('Error saving email settings:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save email settings.",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingEmailSettings(false);
+    }
+  };
+
+  // Shipping settings functions
+  const loadShippingSettings = async () => {
+    if (activeSection !== 'shipping') return;
+    
+    try {
+      const response = await adminApiClient.get('/shipping-settings/settings');
+      console.log('🚢 Shipping settings response:', response);
+      const data = response.data || response;
+      console.log('🚢 Shipping settings data:', data);
+      
+      if (data && data.data) {
+        console.log('🚢 Shipping settings nested data:', data.data);
+        setShippingSettings(prev => ({
+          ...prev,
+          ...data.data
+        }));
+      } else if (data) {
+        setShippingSettings(prev => ({
+          ...prev,
+          ...data
+        }));
+      }
+    } catch (error) {
+      console.error('Error loading shipping settings:', error);
+      // Don't show error toast for loading, just use defaults
+    }
+  };
+
+  const saveShippingSettings = async () => {
+    setSavingShippingSettings(true);
+    try {
+      const settingsToSave = {
+        dhl_api_key: shippingSettings.dhl_api_key,
+        dhl_api_secret: shippingSettings.dhl_api_secret,
+        dhl_account_number: shippingSettings.dhl_account_number,
+        dhl_base_url: shippingSettings.dhl_base_url,
+        dhl_from_name: shippingSettings.dhl_from_name,
+        dhl_from_street: shippingSettings.dhl_from_street,
+        dhl_from_city: shippingSettings.dhl_from_city,
+        dhl_from_state: shippingSettings.dhl_from_state,
+        dhl_from_zip: shippingSettings.dhl_from_zip,
+        dhl_from_country: shippingSettings.dhl_from_country
+      };
+
+      await adminApiClient.put('/shipping-settings/settings', settingsToSave);
+      
+      toast({
+        title: "Settings Saved",
+        description: "DHL shipping settings have been updated successfully.",
+        className: "bg-green-50 border-green-200 text-green-700",
+      });
+    } catch (error) {
+      console.error('Error saving shipping settings:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save DHL shipping settings.",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingShippingSettings(false);
+    }
+  };
+
+  const handleTestMyDhl = async () => {
+    setTestingDhl(true);
+    setDhlTestResult(null);
+    try {
+      // Use saved settings if available, otherwise empty (backend will use DB/env)
+      const body = {};
+      const response = await adminApiClient.post('/shipping-settings/test-dhl', body);
+      const data = response?.data || response;
+      setDhlTestResult({
+        success: data.success,
+        message: data.message,
+        error: data.error,
+        rates: data.rates,
+        details: data.details,
+      });
+      if (data.success) {
+        toast({
+          title: "MyDHL test passed",
+          description: data.message,
+          className: "bg-green-50 border-green-200 text-green-700",
+        });
+      } else if (data.error) {
+        toast({
+          title: "MyDHL test failed",
+          description: data.error,
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      const errorMessage = err.message || 'Request failed';
+      setDhlTestResult({ success: false, error: errorMessage });
+      toast({
+        title: "MyDHL test failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setTestingDhl(false);
+    }
+  };
+
   const handleUserUpdated = (updatedUser) => {
     setAdminUsers(prev => prev.map(user => 
       user.id === updatedUser.id ? updatedUser : user
@@ -253,34 +521,101 @@ const SettingsNew = () => {
     setAdminUsers(prev => prev.filter(user => user.id !== deletedUserId));
   };
 
-  // Favicon update function
+  // Favicon update function - more aggressive to force browser refresh
   const updateFavicon = (faviconUrl) => {
-    if (!faviconUrl) return;
+    if (!faviconUrl) {
+      // Remove all favicon links if no URL provided
+      const existingLinks = document.querySelectorAll('link[rel*="icon"], link[rel="shortcut icon"]');
+      existingLinks.forEach(link => link.remove());
+      return;
+    }
     
-    // Remove existing favicon links
-    const existingLinks = document.querySelectorAll('link[rel*="icon"]');
-    existingLinks.forEach(link => link.remove());
+    try {
+      // Remove ALL existing favicon links (including shortcut icon)
+      const existingLinks = document.querySelectorAll('link[rel*="icon"], link[rel="shortcut icon"]');
+      existingLinks.forEach(link => {
+        link.remove();
+        // Force removal from DOM
+        if (link.parentNode) {
+          link.parentNode.removeChild(link);
+        }
+      });
 
-    // Create new favicon link
-    const link = document.createElement('link');
-    link.rel = 'icon';
-    link.type = getFaviconType(faviconUrl);
-    link.href = faviconUrl;
-    
-    // Add cache busting parameter
-    const url = new URL(faviconUrl);
-    url.searchParams.set('v', Date.now());
-    link.href = url.toString();
+      // Handle both absolute and relative URLs
+      let url;
+      try {
+        // Try to create URL - works for absolute URLs
+        url = new URL(faviconUrl);
+      } catch (e) {
+        // If it fails, it's a relative URL - create from current origin
+        url = new URL(faviconUrl, window.location.origin);
+      }
+      
+      // Add aggressive cache busting with timestamp
+      const timestamp = Date.now();
+      url.searchParams.set('v', timestamp);
+      url.searchParams.set('t', timestamp);
+      const finalUrl = url.toString();
 
-    document.head.appendChild(link);
+      const faviconType = getFaviconType(faviconUrl);
 
-    // Also add apple-touch-icon for mobile devices
-    const appleLink = document.createElement('link');
-    appleLink.rel = 'apple-touch-icon';
-    appleLink.href = url.toString();
-    document.head.appendChild(appleLink);
+      // Create multiple favicon link types for better browser compatibility
+      const linkTypes = [
+        { rel: 'icon', type: faviconType },
+        { rel: 'shortcut icon', type: faviconType },
+        { rel: 'apple-touch-icon', type: faviconType }
+      ];
 
-    console.log('🎨 Favicon updated:', faviconUrl);
+      linkTypes.forEach(({ rel, type }) => {
+        const link = document.createElement('link');
+        link.rel = rel;
+        link.type = type;
+        link.href = finalUrl;
+        // Insert at the beginning of head for priority
+        document.head.insertBefore(link, document.head.firstChild);
+      });
+
+      // Force browser to reload favicon by creating an iframe trick (works in some browsers)
+      try {
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.src = finalUrl;
+        document.body.appendChild(iframe);
+        setTimeout(() => {
+          if (iframe.parentNode) {
+            iframe.parentNode.removeChild(iframe);
+          }
+        }, 100);
+      } catch (e) {
+        // Ignore iframe errors
+      }
+
+      console.log('🎨 Favicon updated with multiple link types:', finalUrl);
+      
+      // Force a small delay and update again to ensure browser picks it up
+      setTimeout(() => {
+        const links = document.querySelectorAll('link[rel*="icon"]');
+        links.forEach(link => {
+          const href = link.getAttribute('href');
+          if (href && !href.includes('v=')) {
+            const newUrl = new URL(href.includes('http') ? href : `${window.location.origin}${href}`, window.location.origin);
+            newUrl.searchParams.set('v', Date.now());
+            link.href = newUrl.toString();
+          }
+        });
+      }, 500);
+    } catch (error) {
+      console.error('Error updating favicon:', error);
+      // Fallback: try to set it directly without URL manipulation
+      const existingLinks = document.querySelectorAll('link[rel*="icon"], link[rel="shortcut icon"]');
+      existingLinks.forEach(link => link.remove());
+      
+      const link = document.createElement('link');
+      link.rel = 'icon';
+      link.type = getFaviconType(faviconUrl);
+      link.href = `${faviconUrl}?v=${Date.now()}&t=${Date.now()}`;
+      document.head.insertBefore(link, document.head.firstChild);
+    }
   };
 
   const getFaviconType = (url) => {
@@ -661,6 +996,9 @@ const SettingsNew = () => {
     { id: 'payment', label: 'Payment', icon: CreditCard, color: 'text-purple-600' },
     { id: 'security', label: 'Security', icon: Shield, color: 'text-red-600' },
     { id: 'appearance', label: 'Appearance', icon: Image, color: 'text-orange-600' },
+    { id: 'email', label: 'Email Settings', icon: Mail, color: 'text-cyan-600' },
+    { id: 'shipping', label: 'Shipping', icon: Truck, color: 'text-teal-600' },
+    { id: 'google', label: 'Google Services', icon: SettingsIcon, color: 'text-blue-500' },
     { id: 'users', label: 'User Management', icon: ShieldCheck, color: 'text-indigo-600' },
   ];
 
@@ -865,6 +1203,21 @@ const SettingsNew = () => {
                           </div>
                           <p className="text-sm text-gray-500 mt-1">
                             Current rate: 1 USD = {settings.exchange_rate} GHS
+              </p>
+            </div>
+            <div>
+                          <Label htmlFor="exchange_rate_gbp">Exchange Rate (GBP per USD)</Label>
+                          <Input
+                id="exchange_rate_gbp"
+                type="number"
+                step="0.01"
+                              value={settings.exchange_rate_gbp}
+                              onChange={(e) => setSettings(prev => ({ ...prev, exchange_rate_gbp: parseFloat(e.target.value) || 0.79 }))}
+                              placeholder="0.79"
+                              className="flex-1"
+                            />
+                          <p className="text-sm text-gray-500 mt-1">
+                            Current rate: 1 USD = {settings.exchange_rate_gbp} GBP
               </p>
             </div>
                       </div>
@@ -1118,13 +1471,28 @@ const SettingsNew = () => {
                         <Label htmlFor="favicon">Favicon</Label>
                         <div className="flex items-center space-x-4">
                           {settings.favicon_url && (
-                            <div className="relative w-16 h-16 border rounded-lg overflow-hidden bg-gray-50 flex items-center justify-center">
+                            <div className="relative w-16 h-16 border rounded-lg overflow-hidden bg-gray-50 flex items-center justify-center group">
                               <img 
                                 src={settings.favicon_url} 
                                 alt="Favicon" 
                                 className="max-w-full max-h-full object-contain"
-              />
-            </div>
+                                onError={(e) => {
+                                  console.error('Failed to load favicon preview:', settings.favicon_url);
+                                  e.target.style.display = 'none';
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSettings(prev => ({ ...prev, favicon_url: '' }));
+                                  updateFavicon('');
+                                }}
+                                className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs"
+                                title="Remove favicon"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
                           )}
                           <div className="flex-1">
               <Input
@@ -1135,15 +1503,33 @@ const SettingsNew = () => {
                                 const file = e.target.files?.[0];
                                 if (file) {
                                   try {
-                                    const formData = new FormData();
-                                    formData.append('image', file);
-                                    const response = await uploadHeroImage(formData);
+                                    console.log('📤 Uploading favicon file:', file.name, file.type);
+                                    const response = await uploadHeroImage(file);
+                                    console.log('📥 Favicon upload response:', response);
                                     if (response.success) {
-                                      setSettings(prev => ({ ...prev, favicon_url: response.imageUrl }));
-                                      toast({ title: "Success", description: "Favicon uploaded successfully" });
+                                      const imageUrl = response.imageUrl || response.url;
+                                      console.log('✅ Favicon uploaded, URL:', imageUrl);
+                                      
+                                      // Update state immediately so preview shows
+                                      setSettings(prev => ({ ...prev, favicon_url: imageUrl }));
+                                      
+                                      // Update favicon in browser immediately
+                                      updateFavicon(imageUrl);
+                                      
+                                      toast({ 
+                                        title: "Success", 
+                                        description: "Favicon uploaded and applied! Don't forget to save settings to persist it." 
+                                      });
+                                    } else {
+                                      throw new Error(response.error || 'Upload failed');
                                     }
                                   } catch (error) {
-                                    toast({ title: "Error", description: "Failed to upload favicon", variant: "destructive" });
+                                    console.error('❌ Favicon upload error:', error);
+                                    toast({ 
+                                      title: "Error", 
+                                      description: error.message || "Failed to upload favicon", 
+                                      variant: "destructive" 
+                                    });
                                   }
                                 }
                               }}
@@ -1371,6 +1757,402 @@ const SettingsNew = () => {
         </Card>
                 </motion.div>
               )}
+
+              {/* Email Settings */}
+              {activeSection === 'email' && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center space-x-2">
+                        <Mail className="h-5 w-5 text-cyan-600" />
+                        <span>Email Settings</span>
+                      </CardTitle>
+                      <CardDescription>
+                        Configure SMTP settings for sending emails to customers and subscribers
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <Label htmlFor="smtp_host">SMTP Host</Label>
+                          <Input
+                            id="smtp_host"
+                            value={emailSettings.smtp_host}
+                            onChange={(e) => setEmailSettings(prev => ({ ...prev, smtp_host: e.target.value }))}
+                            placeholder="smtp.gmail.com"
+                          />
+                        </div>
+                        
+                        <div>
+                          <Label htmlFor="smtp_port">SMTP Port</Label>
+                          <Input
+                            id="smtp_port"
+                            type="number"
+                            value={emailSettings.smtp_port}
+                            onChange={(e) => setEmailSettings(prev => ({ ...prev, smtp_port: parseInt(e.target.value) }))}
+                            placeholder="587"
+                          />
+                        </div>
+                        
+                        <div>
+                          <Label htmlFor="smtp_username">Username</Label>
+                          <Input
+                            id="smtp_username"
+                            value={emailSettings.smtp_username}
+                            onChange={(e) => setEmailSettings(prev => ({ ...prev, smtp_username: e.target.value }))}
+                            placeholder="your-email@gmail.com"
+                          />
+                        </div>
+                        
+                        <div>
+                          <Label htmlFor="smtp_password">Password</Label>
+                          <Input
+                            id="smtp_password"
+                            type="password"
+                            value={emailSettings.smtp_password}
+                            onChange={(e) => setEmailSettings(prev => ({ ...prev, smtp_password: e.target.value }))}
+                            placeholder="App password"
+                          />
+                        </div>
+                        
+                        <div>
+                          <Label htmlFor="smtp_from_email">From Email</Label>
+                          <Input
+                            id="smtp_from_email"
+                            value={emailSettings.smtp_from_email}
+                            onChange={(e) => setEmailSettings(prev => ({ ...prev, smtp_from_email: e.target.value }))}
+                            placeholder="noreply@yourstore.com"
+                          />
+                        </div>
+                        
+                        <div>
+                          <Label htmlFor="smtp_from_name">From Name</Label>
+                          <Input
+                            id="smtp_from_name"
+                            value={emailSettings.smtp_from_name}
+                            onChange={(e) => setEmailSettings(prev => ({ ...prev, smtp_from_name: e.target.value }))}
+                            placeholder="Your Store Name"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="smtp_secure"
+                          checked={emailSettings.smtp_secure}
+                          onChange={(e) => setEmailSettings(prev => ({ ...prev, smtp_secure: e.target.checked }))}
+                          className="rounded border-gray-300"
+                        />
+                        <Label htmlFor="smtp_secure">Use SSL/TLS</Label>
+                      </div>
+
+                      <div className="flex justify-end">
+                        <Button 
+                          onClick={saveEmailSettings}
+                          disabled={savingEmailSettings}
+                          className="bg-[#D2B48C] hover:bg-[#C19A6B]"
+                        >
+                          {savingEmailSettings ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Saving...
+                            </>
+                          ) : (
+                            <>
+                              <Save className="w-4 h-4 mr-2" />
+                              Save Email Settings
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
+
+              {/* DHL Shipping Settings */}
+              {activeSection === 'shipping' && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center space-x-2">
+                        <Truck className="h-5 w-5 text-teal-600" />
+                        <span>DHL Shipping Settings</span>
+                      </CardTitle>
+                      <CardDescription>
+                        Configure MyDHL API settings for shipping with DHL Express
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <Label htmlFor="dhl_api_key">DHL API Key</Label>
+                          <Input
+                            id="dhl_api_key"
+                            type="text"
+                            value={shippingSettings.dhl_api_key}
+                            onChange={(e) => setShippingSettings(prev => ({ ...prev, dhl_api_key: e.target.value }))}
+                            placeholder="Your DHL API Key (Consumer Key)"
+                          />
+                          <p className="text-sm text-gray-500 mt-1">
+                            From DHL Developer Portal - My Apps
+                          </p>
+                        </div>
+                        
+                        <div>
+                          <Label htmlFor="dhl_api_secret">DHL API Secret</Label>
+                          <Input
+                            id="dhl_api_secret"
+                            type="password"
+                            value={shippingSettings.dhl_api_secret}
+                            onChange={(e) => setShippingSettings(prev => ({ ...prev, dhl_api_secret: e.target.value }))}
+                            placeholder="Your DHL API Secret"
+                          />
+                          <p className="text-sm text-gray-500 mt-1">
+                            From DHL Developer Portal - My Apps
+                          </p>
+                        </div>
+                        
+                        <div>
+                          <Label htmlFor="dhl_account_number">DHL Account Number</Label>
+                          <Input
+                            id="dhl_account_number"
+                            type="text"
+                            value={shippingSettings.dhl_account_number}
+                            onChange={(e) => setShippingSettings(prev => ({ ...prev, dhl_account_number: e.target.value }))}
+                            placeholder="Your DHL shipper account number"
+                          />
+                          <p className="text-sm text-gray-500 mt-1">
+                            Your DHL export/shipper account number
+                          </p>
+                        </div>
+                        
+                        <div>
+                          <Label htmlFor="dhl_base_url">API Base URL</Label>
+                          <select
+                            id="dhl_base_url"
+                            value={shippingSettings.dhl_base_url}
+                            onChange={(e) => setShippingSettings(prev => ({ ...prev, dhl_base_url: e.target.value }))}
+                            className="w-full h-10 px-3 border border-gray-300 rounded-md bg-white text-sm"
+                          >
+                            <option value="https://express.api.dhl.com/mydhlapi/test">Test (Sandbox)</option>
+                            <option value="https://express.api.dhl.com/mydhlapi">Production (Live)</option>
+                          </select>
+                          <p className="text-sm text-gray-500 mt-1">
+                            Use Test for testing, Production for live shipments
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="border-t pt-6">
+                        <h3 className="text-lg font-medium mb-4">Origin Address (Shipper)</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div>
+                            <Label htmlFor="dhl_from_name">Business Name</Label>
+                            <Input
+                              id="dhl_from_name"
+                              value={shippingSettings.dhl_from_name}
+                              onChange={(e) => setShippingSettings(prev => ({ ...prev, dhl_from_name: e.target.value }))}
+                              placeholder="TailoredHands"
+                            />
+                          </div>
+                          
+                          <div>
+                            <Label htmlFor="dhl_from_street">Street Address</Label>
+                            <GoogleAddressAutocomplete
+                              value={shippingSettings.dhl_from_street}
+                              onChange={(value) => setShippingSettings(prev => ({ ...prev, dhl_from_street: value }))}
+                              onAddressSelect={(addressData) => {
+                                setShippingSettings(prev => ({
+                                  ...prev,
+                                  dhl_from_street: addressData.address,
+                                  dhl_from_city: addressData.city || prev.dhl_from_city,
+                                  dhl_from_state: addressData.state || prev.dhl_from_state,
+                                  dhl_from_zip: addressData.zip || prev.dhl_from_zip,
+                                  dhl_from_country: addressData.country || prev.dhl_from_country
+                                }));
+                              }}
+                              placeholder="Enter your business address"
+                              label=""
+                              required={false}
+                            />
+                          </div>
+                          
+                          <div>
+                            <Label htmlFor="dhl_from_city">City</Label>
+                            <Input
+                              id="dhl_from_city"
+                              value={shippingSettings.dhl_from_city}
+                              onChange={(e) => setShippingSettings(prev => ({ ...prev, dhl_from_city: e.target.value }))}
+                              placeholder="Accra"
+                            />
+                          </div>
+                          
+                          <div>
+                            <Label htmlFor="dhl_from_state">State/Region</Label>
+                            <Input
+                              id="dhl_from_state"
+                              value={shippingSettings.dhl_from_state}
+                              onChange={(e) => setShippingSettings(prev => ({ ...prev, dhl_from_state: e.target.value }))}
+                              placeholder="Greater Accra"
+                            />
+                          </div>
+                          
+                          <div>
+                            <Label htmlFor="dhl_from_zip">ZIP/Postal Code</Label>
+                            <Input
+                              id="dhl_from_zip"
+                              value={shippingSettings.dhl_from_zip}
+                              onChange={(e) => setShippingSettings(prev => ({ ...prev, dhl_from_zip: e.target.value }))}
+                              placeholder="00233"
+                            />
+                          </div>
+                          
+                          <div>
+                            <Label htmlFor="dhl_from_country">Country Code</Label>
+                            <Input
+                              id="dhl_from_country"
+                              value={shippingSettings.dhl_from_country}
+                              onChange={(e) => setShippingSettings(prev => ({ ...prev, dhl_from_country: e.target.value }))}
+                              placeholder="GH"
+                              maxLength={2}
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end">
+                        <Button
+                          onClick={saveShippingSettings}
+                          disabled={savingShippingSettings}
+                          className="bg-[#D2B48C] hover:bg-[#C4A484] text-white"
+                        >
+                          {savingShippingSettings ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Saving...
+                            </>
+                          ) : (
+                            <>
+                              <Save className="w-4 h-4 mr-2" />
+                              Save DHL Settings
+                            </>
+                          )}
+                        </Button>
+                      </div>
+
+                      <div className="border-t pt-6 mt-6">
+                        <h3 className="text-lg font-medium mb-2">Test DHL Connection</h3>
+                        <p className="text-sm text-gray-500 mb-4">
+                          Test your DHL API credentials by making a sample rates request. Uses the saved settings above.
+                        </p>
+                        <div className="flex items-center gap-4">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handleTestMyDhl}
+                            disabled={testingDhl}
+                          >
+                            {testingDhl ? (
+                              <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Testing...
+                              </>
+                            ) : (
+                              'Test MyDHL connection'
+                            )}
+                          </Button>
+                          {dhlTestResult !== null && (
+                            <div className={`text-sm ${dhlTestResult.success ? 'text-green-600' : 'text-red-600'}`}>
+                              {dhlTestResult.success ? (
+                                <span>{dhlTestResult.message}</span>
+                              ) : (
+                                <span>{dhlTestResult.error}</span>
+                              )}
+                            </div>
+                          )}
+                        {dhlTestResult?.details && !dhlTestResult.success && (
+                          <div className="mt-2 p-3 bg-red-50 rounded text-sm text-red-700">
+                            <strong>DHL response details:</strong>
+                            <pre className="mt-1 overflow-auto max-h-32 text-xs whitespace-pre-wrap">
+                              {JSON.stringify(dhlTestResult.details, null, 2)}
+                            </pre>
+                          </div>
+                        )}
+                        </div>
+                        {dhlTestResult?.rates?.length > 0 && (
+                          <div className="mt-3 p-3 bg-gray-50 rounded text-sm">
+                            <strong>Sample rates:</strong>
+                            <pre className="mt-1 overflow-auto max-h-24">
+                              {JSON.stringify(dhlTestResult.rates, null, 2)}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
+
+              {/* Google Services Settings */}
+              {activeSection === 'google' && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center space-x-2">
+                        <SettingsIcon className="h-5 w-5 text-blue-500" />
+                        <span>Google Services</span>
+                      </CardTitle>
+                      <CardDescription>
+                        Configure Google Places API for address autocomplete
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div>
+                        <Label htmlFor="google_places_api_key">Google Places API Key</Label>
+                        <Input
+                          id="google_places_api_key"
+                          type="password"
+                          value={settings.google_places_api_key || ''}
+                          onChange={(e) => {
+                            console.log('🔍 Google Places API key input changed:', e.target.value);
+                            setSettings(prev => ({ ...prev, google_places_api_key: e.target.value }));
+                          }}
+                          placeholder="AIzaSyB..."
+                        />
+                        <p className="text-sm text-gray-500 mt-1">
+                          Get your API key from the Google Cloud Console. Enable Places API and restrict it to your domain.
+                        </p>
+                      </div>
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <h4 className="font-medium text-blue-900 mb-2">Setup Instructions:</h4>
+                        <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
+                          <li>Go to <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">Google Cloud Console</a></li>
+                          <li>Create a new project or select existing one</li>
+                          <li>Enable the "Places API"</li>
+                          <li>Go to "Credentials" and create an API key</li>
+                          <li>Restrict the API key to your domain for security</li>
+                          <li>Copy the API key and paste it above</li>
+                        </ol>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
+
       </div>
 
       {/* Save Button */}

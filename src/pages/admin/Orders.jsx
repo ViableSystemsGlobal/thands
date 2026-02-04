@@ -114,19 +114,35 @@ const OrdersContent = () => {
       // Calculate metrics from the fetched orders
       const totalOrdersCountMetric = fetchedOrders.length;
       const pendingOrdersCount = fetchedOrders.filter(order => 
-        order.status?.toLowerCase() === 'pending' || order.payment_status?.toLowerCase() === 'pending'
+        order.status?.toLowerCase() === 'pending'
       ).length;
       
-      const totalValueUSD = fetchedOrders.reduce((sum, order) => sum + (parseFloat(order.total_amount) || 0), 0);
-      
-      const totalValueGHS = fetchedOrders.reduce((sum, order) => {
-        // Use total_amount_ghs if available, otherwise calculate from USD
-        if (order.total_amount_ghs && order.total_amount_ghs > 0) {
-          return sum + parseFloat(order.total_amount_ghs);
+      const totalValueUSD = fetchedOrders.reduce((sum, order) => {
+        // Use base_total (database field) or total_amount (fallback)
+        let usdValue = parseFloat(order.base_total || order.total_amount || 0);
+        const ghsValue = parseFloat(order.base_total_ghs || order.total_amount_ghs || 0);
+        
+        // If USD is 0 but GHS has a value, calculate USD from GHS
+        if (usdValue === 0 && ghsValue > 0) {
+          const rateToUse = order.exchange_rate || exchangeRate || 16;
+          usdValue = ghsValue / rateToUse;
         }
         
-        const ghsAmount = (parseFloat(order.total_amount) || 0) * (exchangeRate || 1);
-        return sum + ghsAmount;
+        return sum + usdValue;
+      }, 0);
+      
+      const totalValueGHS = fetchedOrders.reduce((sum, order) => {
+        // Use base_total_ghs (database field) or total_amount_ghs (fallback)
+        let ghsValue = parseFloat(order.base_total_ghs || order.total_amount_ghs || 0);
+        const usdValue = parseFloat(order.base_total || order.total_amount || 0);
+        
+        // If GHS is 0 but USD has a value, calculate GHS from USD
+        if (ghsValue === 0 && usdValue > 0) {
+          const rateToUse = order.exchange_rate || exchangeRate || 16;
+          ghsValue = usdValue * rateToUse;
+        }
+        
+        return sum + ghsValue;
       }, 0);
       
       setMetrics({

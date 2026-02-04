@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Template</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .email-header {
+            background-color: #D2B48C;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .email-header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .email-body {
+            padding: 30px;
+        }
+        .email-footer {
+            background-color: #f8f9fa;
+            padding: 20px;
+            text-align: center;
+            font-size: 14px;
+            color: #666;
+            border-top: 1px solid #e9ecef;
+        }
+        .button {
+            display: inline-block;
+            background-color: #D2B48C;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        .button:hover {
+            background-color: #B8860B;
+        }
+        .content-section {
+            margin: 20px 0;
+        }
+        .footer-links {
+            margin: 10px 0;
+        }
+        .footer-links a {
+            color: #D2B48C;
+            text-decoration: none;
+            margin: 0 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <!-- Header -->
+        <div class="email-header">
+            <h1>{{company_name}}</h1>
+            <p>Modern Elegance Redefined</p>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="email-body">
+            <h2>{{subject}}</h2>
+            
+            <div class="content-section">
+                {{content}}
+            </div>
+            
+            <!-- Call to Action Button (if needed) -->
+            {{#if button_text}}
+            <div style="text-align: center;">
+                <a href="{{button_url}}" class="button">{{button_text}}</a>
+            </div>
+            {{/if}}
+        </div>
+        
+        <!-- Footer -->
+        <div class="email-footer">
+            <div class="footer-links">
+                <a href="{{website_url}}">Visit Our Website</a>
+                <a href="{{contact_url}}">Contact Us</a>
+            </div>
+            <p>&copy; {{current_year}} {{company_name}}. All rights reserved.</p>
+            <p>
+                <strong>Contact Information:</strong><br>
+                Email: {{company_email}}<br>
+                Phone: {{company_phone}}<br>
+                Address: {{company_address}}
+            </p>
+        </div>
+    </div>
+</body>
+</html>

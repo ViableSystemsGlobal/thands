@@ -1,10 +1,12 @@
-import React from "react";
+import React, { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CountryCombobox } from "@/components/shop/CountryCombobox";
 import { countries } from "@/lib/location-data";
 import { History } from "lucide-react";
+import ShippoShippingOptions from "./ShippoShippingOptions";
+import GoogleAddressAutocomplete from "./GoogleAddressAutocomplete";
 
 const ShippingInformationForm = ({
   formData,
@@ -17,7 +19,10 @@ const ShippingInformationForm = ({
   setCreateAccount,
   password,
   setPassword,
-  shippingRules
+  shippingRules,
+  cartItems,
+  onShippingSelected,
+  selectedShipping
 }) => {
   return (
     <div className="space-y-6">
@@ -114,13 +119,28 @@ const ShippingInformationForm = ({
       </div>
 
       <div className="space-y-2 mt-4">
-        <Label htmlFor="address">Address</Label>
-        <Input
-          id="address"
-          name="address"
+        <GoogleAddressAutocomplete
           value={formData.address}
-          onChange={handleInputChange}
-          className={formErrors.address ? "border-red-500" : ""}
+          onChange={(value) => handleInputChange({ target: { name: 'address', value } })}
+          onAddressSelect={(addressData) => {
+            // Auto-fill form fields with parsed address data
+            handleInputChange({ target: { name: 'address', value: addressData.address } });
+            if (addressData.city) {
+              handleInputChange({ target: { name: 'city', value: addressData.city } });
+            }
+            if (addressData.state) {
+              handleInputChange({ target: { name: 'state', value: addressData.state } });
+            }
+            if (addressData.zip) {
+              handleInputChange({ target: { name: 'postalCode', value: addressData.zip } });
+            }
+            if (addressData.country) {
+              handleInputChange({ target: { name: 'country', value: addressData.country } });
+            }
+          }}
+          placeholder="Enter your address"
+          label="Address"
+          required={true}
         />
         {formErrors.address && (
           <p className="text-sm text-red-500">{formErrors.address}</p>
@@ -198,6 +218,16 @@ const ShippingInformationForm = ({
           placeholder="Any special instructions for your order..."
           className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#D2B48C] focus:border-[#D2B48C] resize-none"
           rows={3}
+        />
+      </div>
+
+      {/* Shippo Shipping Options */}
+      <div className="mt-6">
+        <ShippoShippingOptions
+          address={formData}
+          cartItems={cartItems || []}
+          onShippingSelected={onShippingSelected}
+          selectedShipping={selectedShipping}
         />
       </div>
 

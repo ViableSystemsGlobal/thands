@@ -22,10 +22,17 @@ const ProductDetailLayout = ({
   relatedProducts,
   generalFAQs,
   handleSizeSelect,
+  onSizeSelect,
   handleAddToCart,
+  onAddToCart,
   handleToggleWishlist,
+  onToggleWishlist,
   isInWishlist,
 }) => {
+  // Support both prop naming conventions for backward compatibility
+  const sizeSelectHandler = onSizeSelect || handleSizeSelect;
+  const addToCartHandler = onAddToCart || handleAddToCart;
+  const toggleWishlistHandler = onToggleWishlist || handleToggleWishlist;
   const { formatPrice, convertToActiveCurrency, currency } = useCurrency();
 
   if (loading || productLoading) {
@@ -68,9 +75,9 @@ const ProductDetailLayout = ({
             sizes={sizes}
             selectedSize={selectedSize}
             currentPrice={currentPrice}
-            onSizeSelect={handleSizeSelect}
-            onAddToCart={handleAddToCart}
-            onToggleWishlist={handleToggleWishlist}
+            onSizeSelect={sizeSelectHandler}
+            onAddToCart={addToCartHandler}
+            onToggleWishlist={toggleWishlistHandler}
             isInWishlist={isInWishlist}
           />
         </div>

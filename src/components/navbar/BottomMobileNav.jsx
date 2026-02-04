@@ -1,12 +1,13 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { User, Heart, ShoppingCart } from 'lucide-react';
+import { User, Heart, ShoppingCart, MessageCircle, Home } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useShop } from '@/context/ShopContext';
 import { useCartState } from '@/context/ShopContext/cartState';
 import { cn } from '@/lib/utils';
 import { useLocation } from 'react-router-dom';
+import CartDrawer from '@/components/cart/CartDrawer';
 
 const BottomMobileNav = () => {
   const { user } = useAuth();
@@ -15,7 +16,17 @@ const BottomMobileNav = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [cartDrawerOpen, setCartDrawerOpen] = useState(false);
+
   const navItems = [
+    {
+      icon: Home,
+      label: 'Home',
+      action: () => navigate('/'),
+      path: '/',
+      activePaths: ['/'],
+    },
     {
       icon: Heart,
       label: 'Wishlist',
@@ -27,10 +38,23 @@ const BottomMobileNav = () => {
     {
       icon: ShoppingCart,
       label: 'Cart',
-      action: () => navigate('/cart'),
+      action: () => setCartDrawerOpen(true),
       path: '/cart',
       activePaths: ['/cart', '/checkout'],
       badge: cartItemsCount > 0 ? cartItemsCount : null,
+    },
+    {
+      icon: MessageCircle,
+      label: 'Chat',
+      action: () => {
+        // Toggle chat - this will be handled by ChatbotWebSocket
+        setIsChatOpen(!isChatOpen);
+        // Dispatch custom event to open chat
+        window.dispatchEvent(new CustomEvent('openChat'));
+      },
+      path: null,
+      activePaths: [],
+      isChat: true,
     },
     {
       icon: User,
@@ -55,16 +79,16 @@ const BottomMobileNav = () => {
               key={item.label}
               onClick={item.action}
               className={cn(
-                'flex flex-col items-center justify-center text-xs font-medium w-1/4 relative transition-colors duration-200 ease-in-out rounded-md p-1',
-                isActive(item)
+                'flex flex-col items-center justify-center text-xs font-medium w-1/5 relative transition-colors duration-200 ease-in-out rounded-md p-1',
+                isActive(item) || (item.isChat && isChatOpen)
                   ? 'text-[#D2B48C] dark:text-[#D2B48C]'
                   : 'text-slate-600 dark:text-slate-400 hover:text-[#D2B48C] dark:hover:text-[#D2B48C]'
               )}
             >
-              <item.icon className="h-5 w-5 mb-0.5" strokeWidth={isActive(item) ? 2.5 : 2} />
+              <item.icon className="h-5 w-5 mb-0.5" strokeWidth={(isActive(item) || (item.isChat && isChatOpen)) ? 2.5 : 2} />
               <span>{item.label}</span>
               {item.badge && (
-                <span className="absolute top-0 right-1/4 transform translate-x-1/2 -translate-y-0.5 bg-[#D2B48C] text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center">
+                <span className="absolute top-0 right-0 transform translate-x-1/2 -translate-y-0.5 bg-[#D2B48C] text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center">
                   {item.badge}
                 </span>
               )}
@@ -72,6 +96,8 @@ const BottomMobileNav = () => {
           ))}
         </div>
       </div>
+
+      <CartDrawer open={cartDrawerOpen} onOpenChange={setCartDrawerOpen} />
     </nav>
   );
 };

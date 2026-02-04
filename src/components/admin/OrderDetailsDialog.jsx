@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -7,11 +7,14 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { generateOrderPDF } from "@/lib/pdf";
-import { Download, Package, CreditCard } from "lucide-react";
+import { Download, Package, CreditCard, Truck } from "lucide-react";
 import { useCurrency } from "@/context/CurrencyContext";
+import InternationalShipping from "./InternationalShipping";
 
 const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
   const { formatPrice, exchangeRate } = useCurrency(); 
+  const [showShipping, setShowShipping] = useState(false);
+  
   if (!order) return null;
 
   const getImageUrl = (imagePath) => {
@@ -73,26 +76,62 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
     return 0;
   };
   
-  const orderTotalUSD = order.base_total || order.total_amount || 0;
-  const orderTotalGHS = calculateGHSValue(
-    orderTotalUSD,
-    order.base_total_ghs || order.total_amount_ghs,
-    order.exchange_rate
-  );
+  // Get USD and GHS values, with fallback logic
+  let orderTotalUSD = parseFloat(order.base_total || order.total_amount || 0);
+  let orderTotalGHS = parseFloat(order.base_total_ghs || order.total_amount_ghs || 0);
+  
+  // If USD is 0 but GHS has a value, calculate USD from GHS
+  if (orderTotalUSD === 0 && orderTotalGHS > 0) {
+    const rateToUse = order.exchange_rate || exchangeRate;
+    orderTotalUSD = orderTotalGHS / rateToUse;
+  } else if (orderTotalUSD > 0 && orderTotalGHS === 0) {
+    // If GHS is 0 but USD has a value, calculate GHS from USD
+    const rateToUse = order.exchange_rate || exchangeRate;
+    orderTotalGHS = orderTotalUSD * rateToUse;
+  } else if (orderTotalUSD > 0 && orderTotalGHS > 0) {
+    // Both exist, use the stored GHS value
+    orderTotalGHS = calculateGHSValue(
+      orderTotalUSD,
+      orderTotalGHS,
+      order.exchange_rate
+    );
+  }
 
-  const subTotalUSD = order.base_subtotal || order.subtotal_amount || 0;
-  const subTotalGHS = calculateGHSValue(
-    subTotalUSD,
-    order.base_subtotal_ghs,
-    order.exchange_rate
-  );
+  let subTotalUSD = parseFloat(order.base_subtotal || order.subtotal_amount || 0);
+  let subTotalGHS = parseFloat(order.base_subtotal_ghs || 0);
+  
+  // If USD is 0 but GHS has a value, calculate USD from GHS
+  if (subTotalUSD === 0 && subTotalGHS > 0) {
+    const rateToUse = order.exchange_rate || exchangeRate;
+    subTotalUSD = subTotalGHS / rateToUse;
+  } else if (subTotalUSD > 0 && subTotalGHS === 0) {
+    const rateToUse = order.exchange_rate || exchangeRate;
+    subTotalGHS = subTotalUSD * rateToUse;
+  } else if (subTotalUSD > 0 && subTotalGHS > 0) {
+    subTotalGHS = calculateGHSValue(
+      subTotalUSD,
+      subTotalGHS,
+      order.exchange_rate
+    );
+  }
 
-  const shippingUSD = order.base_shipping || order.shipping_amount || 0;
-  const shippingGHS = calculateGHSValue(
-    shippingUSD,
-    order.base_shipping_ghs,
-    order.exchange_rate
-  );
+  let shippingUSD = parseFloat(order.base_shipping || order.shipping_amount || 0);
+  let shippingGHS = parseFloat(order.base_shipping_ghs || 0);
+  
+  // If USD is 0 but GHS has a value, calculate USD from GHS
+  if (shippingUSD === 0 && shippingGHS > 0) {
+    const rateToUse = order.exchange_rate || exchangeRate;
+    shippingUSD = shippingGHS / rateToUse;
+  } else if (shippingUSD > 0 && shippingGHS === 0) {
+    const rateToUse = order.exchange_rate || exchangeRate;
+    shippingGHS = shippingUSD * rateToUse;
+  } else if (shippingUSD > 0 && shippingGHS > 0) {
+    shippingGHS = calculateGHSValue(
+      shippingUSD,
+      shippingGHS,
+      order.exchange_rate
+    );
+  }
 
   const couponDiscountUSD = order.coupon_discount_amount || 0;
   const couponDiscountGHS = calculateGHSValue(
@@ -185,6 +224,53 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
                   );
                 })}
               </div>
+
+              {/* International Shipping Section */}
+              {order.shipping_country && order.shipping_country !== 'GH' && (
+                <div className="mt-6 pt-6 border-t border-gray-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
+                      <Truck className="w-5 h-5" />
+                      International Shipping
+                    </h3>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowShipping(!showShipping)}
+                    >
+                      {showShipping ? 'Hide' : 'Manage'} Shipping
+                    </Button>
+                  </div>
+                  
+                  {showShipping && (
+                    <InternationalShipping
+                      order={order}
+                      onLabelCreated={(label) => {
+                        console.log('Label created:', label);
+                        setShowShipping(false);
+                        // Refresh the order data or close dialog
+                        onOpenChange(false);
+                      }}
+                      onClose={() => setShowShipping(false)}
+                    />
+                  )}
+                  
+                  {!showShipping && order.tracking_number && (
+                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Package className="w-4 h-4 text-green-600" />
+                        <span className="font-medium text-green-800">Label Created</span>
+                      </div>
+                      <p className="text-sm text-green-700">
+                        Tracking: <span className="font-mono">{order.tracking_number}</span>
+                      </p>
+                      <p className="text-sm text-green-600">
+                        Carrier: {order.shipping_carrier} - {order.shipping_service}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="mt-6 pt-6 border-t border-gray-200">
                 <div className="flex justify-between mb-2">

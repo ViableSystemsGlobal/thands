@@ -40,13 +40,35 @@ router.get('/', authenticateToken, async (req, res) => {
     const sortField = allowedSortFields.includes(sort_by) ? sort_by : 'created_at';
     const sortDirection = sort_order.toLowerCase() === 'asc' ? 'ASC' : 'DESC';
 
-    // Get customers with pagination
+    // Get customers with pagination and order statistics
     const customersQuery = `
       SELECT 
-        id, email, first_name, last_name, phone, created_at, updated_at,
-        CASE WHEN user_id IS NOT NULL THEN true ELSE false END as is_registered
-      FROM customers 
+        c.id, 
+        c.email, 
+        c.first_name, 
+        c.last_name, 
+        c.phone, 
+        c.created_at, 
+        c.updated_at,
+        c.user_id,
+        CASE WHEN c.user_id IS NOT NULL THEN true ELSE false END as is_registered,
+        COUNT(DISTINCT o.id) FILTER (WHERE o.id IS NOT NULL) as orders_count,
+        COALESCE(SUM(
+          CASE 
+            WHEN o.payment_status = 'paid' AND o.id IS NOT NULL THEN
+              CASE 
+                WHEN o.base_total > 0 THEN o.base_total
+                WHEN o.total_amount_ghs > 0 AND o.exchange_rate > 0 AND o.exchange_rate IS NOT NULL THEN o.total_amount_ghs / NULLIF(o.exchange_rate, 0)
+                WHEN o.total_amount_ghs > 0 THEN o.total_amount_ghs / 16.0
+                ELSE 0
+              END
+            ELSE 0
+          END
+        ), 0) as total_spent
+      FROM customers c
+      LEFT JOIN orders o ON c.id = o.customer_id AND o.status NOT IN ('cancelled', 'failed')
       ${whereClause}
+      GROUP BY c.id, c.email, c.first_name, c.last_name, c.phone, c.created_at, c.updated_at, c.user_id
       ORDER BY ${sortField} ${sortDirection}
       LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}
     `;
@@ -106,11 +128,20 @@ router.get('/metrics', authenticateToken, async (req, res) => {
     `);
     const newCustomersThisMonth = parseInt(thisMonthResult.rows[0].count);
 
-    // Get average order value (from orders table)
+    // Get average order value (from orders table) - use base_total (USD) or calculate from GHS
     const avgOrderValueResult = await query(`
-      SELECT AVG(total_amount_ghs) as avg_value 
+      SELECT 
+        AVG(
+          CASE 
+            WHEN base_total > 0 THEN base_total
+            WHEN total_amount_ghs > 0 AND exchange_rate > 0 AND exchange_rate IS NOT NULL THEN total_amount_ghs / NULLIF(exchange_rate, 0)
+            WHEN total_amount_ghs > 0 THEN total_amount_ghs / 16.0
+            ELSE 0
+          END
+        ) as avg_value 
       FROM orders 
       WHERE status NOT IN ('cancelled', 'failed')
+        AND payment_status = 'paid'
     `);
     const averageOrderValue = parseFloat(avgOrderValueResult.rows[0].avg_value) || 0;
 

@@ -315,10 +315,24 @@ const ChatbotWebSocket = () => {
     return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  // Listen for custom event to open chat from mobile nav
+  useEffect(() => {
+    const handleOpenChat = () => {
+      if (!isOpen) {
+        setIsOpen(true);
+        setIsMinimized(false);
+        setHasNewMessage(false);
+      }
+    };
+    
+    window.addEventListener('openChat', handleOpenChat);
+    return () => window.removeEventListener('openChat', handleOpenChat);
+  }, [isOpen]);
+
   return (
     <>
-      {/* Chat Toggle Button */}
-      <div className="fixed bottom-6 right-6 z-50">
+      {/* Chat Toggle Button - Hidden on mobile, shown on desktop */}
+      <div className="fixed bottom-6 right-6 z-50 hidden md:block">
         {!isOpen && (
           <Button
             onClick={toggleChat}
@@ -337,9 +351,9 @@ const ChatbotWebSocket = () => {
 
       {/* Chat Window */}
       {isOpen && (
-        <div className={`fixed bottom-6 right-6 z-50 transition-all duration-300 ${
-          isMinimized ? 'h-16' : 'h-[600px]'
-        } w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden`}>
+        <div className={`fixed bottom-20 right-4 md:bottom-6 md:right-6 z-50 transition-all duration-300 ${
+          isMinimized ? 'h-16' : 'h-[calc(100vh-120px)] md:h-[600px]'
+        } w-[calc(100vw-2rem)] md:w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden`}>
           {/* Header */}
           <div className="bg-[#D2B48C] text-white p-4 flex items-center justify-between">
             <div className="flex items-center space-x-2">
@@ -372,7 +386,7 @@ const ChatbotWebSocket = () => {
           {!isMinimized && (
             <>
               {/* Messages */}
-              <ScrollArea className="flex-1 p-4 h-[480px]">
+              <ScrollArea className="flex-1 p-4 h-[calc(100vh-240px)] md:h-[480px]">
                 <div className="space-y-4">
                   {messages.map((message) => (
                     <div

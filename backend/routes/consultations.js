@@ -24,7 +24,17 @@ router.get('/metrics', authenticateToken, async (req, res) => {
       FROM consultations
     `);
 
-    res.json(metricsResult.rows[0]);
+    // Convert snake_case to camelCase for frontend
+    const metrics = metricsResult.rows[0];
+    res.json({
+      totalConsultations: parseInt(metrics.total_consultations) || 0,
+      designConsultations: parseInt(metrics.design_consultations) || 0,
+      bookingConsultations: parseInt(metrics.booking_consultations) || 0,
+      pendingConsultations: parseInt(metrics.pending_consultations) || 0,
+      confirmedConsultations: parseInt(metrics.confirmed_consultations) || 0,
+      completedConsultations: parseInt(metrics.completed_consultations) || 0,
+      recentConsultations: parseInt(metrics.recent_consultations) || 0
+    });
   } catch (error) {
     console.error('Error fetching consultation metrics:', error);
     res.status(500).json({ error: 'Failed to fetch metrics', details: error.message });
@@ -225,6 +235,28 @@ router.post('/', [
     } catch (notificationError) {
       console.error('❌ Error sending consultation notification:', notificationError);
       // Don't fail the consultation creation if notification fails
+    }
+
+    // Send admin notification for new consultation
+    try {
+      const adminNotificationResponse = await fetch(`${process.env.API_BASE_URL || 'http://localhost:3003'}/api/notifications/send/admin/consultation`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          consultationId: consultation.id
+        })
+      });
+
+      if (adminNotificationResponse.ok) {
+        console.log('📧 Admin consultation notification sent');
+      } else {
+        console.error('❌ Failed to send admin consultation notification');
+      }
+    } catch (adminNotificationError) {
+      console.error('❌ Error sending admin consultation notification:', adminNotificationError);
+      // Don't fail the consultation creation if admin notification fails
     }
 
     res.status(201).json(consultation);

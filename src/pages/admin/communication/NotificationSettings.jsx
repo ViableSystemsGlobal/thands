@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-// Notification settings functionality temporarily disabled - backend endpoints not yet implemented
+// Notification settings functionality
 import { Save, Loader2, Mail, MessageSquare, TrendingUp, CheckCircle2, XCircle, Clock } from "lucide-react";
-import { getNotificationSettings, getNotificationStats } from "@/lib/services/notifications";
+import { getNotificationSettings, getNotificationStats, saveNotificationSettings } from "@/lib/services/notifications";
 
 const NotificationToggle = ({ label, description, enabled, onChange, icon: Icon }) => (
   <div className="flex items-center justify-between p-4 bg-white rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors">
@@ -116,13 +116,11 @@ const NotificationSettings = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Notification settings save endpoint not yet implemented in backend
-      console.log('📧 Notification settings save endpoint not yet implemented in backend');
+      await saveNotificationSettings(settings);
       
       toast({
-        title: "Feature Not Available",
-        description: "Notification settings save functionality is not yet implemented in the backend.",
-        variant: "destructive",
+        title: "Settings Saved",
+        description: "Notification settings have been saved successfully.",
       });
     } catch (error) {
       console.error("Error saving notification settings:", error);

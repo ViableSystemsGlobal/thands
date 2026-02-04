@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Google Places API Test</title>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAApQedCVsf16_sqx1eBwZR4qmesxdVoiQ&libraries=places"></script>
+</head>
+<body>
+    <h1>Google Places API Test</h1>
+    <input type="text" id="address" placeholder="Enter address" style="width: 300px; padding: 10px;">
+    <div id="results"></div>
+
+    <script>
+        console.log('🔍 Testing Google Places API...');
+        
+        function initAutocomplete() {
+            console.log('🔍 Initializing autocomplete...');
+            
+            if (typeof google === 'undefined') {
+                console.error('❌ Google Maps API not loaded');
+                return;
+            }
+            
+            if (!google.maps || !google.maps.places) {
+                console.error('❌ Google Places API not available');
+                return;
+            }
+            
+            console.log('✅ Google Maps API loaded successfully');
+            
+            const input = document.getElementById('address');
+            const autocomplete = new google.maps.places.Autocomplete(input);
+            
+            autocomplete.addListener('place_changed', function() {
+                const place = autocomplete.getPlace();
+                console.log('📍 Place selected:', place);
+                
+                if (place.formatted_address) {
+                    document.getElementById('results').innerHTML = 
+                        '<h3>Selected Address:</h3><p>' + place.formatted_address + '</p>';
+                }
+            });
+            
+            console.log('✅ Autocomplete initialized successfully');
+        }
+        
+        // Initialize when page loads
+        window.onload = function() {
+            console.log('🔍 Page loaded, initializing...');
+            initAutocomplete();
+        };
+    </script>
+</body>
+</html>

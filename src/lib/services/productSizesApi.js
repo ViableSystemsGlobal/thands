@@ -1,12 +1,13 @@
 // Product Sizes API service - replaces Supabase product_sizes queries
 import adminApiClient from '@/lib/services/adminApiClient';
+import { api } from '@/lib/services/api';
 
 export const productSizesApi = {
-  // Fetch product sizes by product ID
+  // Fetch product sizes by product ID (Public endpoint - no auth required)
   async fetchProductSizes(productId) {
-    const response = await adminApiClient.get(`/product-sizes/product/${productId}`);
-    // adminApiClient returns { success: true, data: [...] }, so we need response.data
-    return response.data || response;
+    // Use regular api client since this is a public endpoint
+    const data = await api.get(`/product-sizes/product/${productId}`);
+    return data || [];
   },
 
   // Create product sizes (Admin only)

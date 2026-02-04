@@ -1,5 +1,6 @@
 const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
+const adminBranchFilter = require('../middleware/adminBranchFilter');
 const { query } = require('../config/database');
 const router = express.Router();
 
@@ -31,9 +32,11 @@ router.get('/test', async (req, res) => {
 });
 
 // Get sales analytics and reports (Admin only)
-router.get('/analytics', authenticateToken, async (req, res) => {
+router.get('/analytics', authenticateToken, adminBranchFilter, async (req, res) => {
   try {
     console.log('🔍 Sales Analytics: Request received');
+    const branchFilter = req.adminBranchFilter;
+    console.log('🔍 Sales Analytics: Branch filter:', branchFilter || 'ALL');
 
     // Check if user is admin
     const adminRoles = ['super_admin', 'admin', 'manager', 'support'];
@@ -302,6 +305,15 @@ router.get('/analytics', authenticateToken, async (req, res) => {
       WHERE 1=1
     `;
 
+    // Add branch filter
+    if (branchFilter) {
+      currentParamCount++;
+      // Include orders with matching branch_code OR NULL (legacy orders without branch_code)
+      currentQuery += ` AND (o.branch_code = $${currentParamCount} OR o.branch_code IS NULL)`;
+      currentParams.push(branchFilter);
+    }
+    // If branchFilter is null (ALL selected), show all orders including NULL branch_code
+    
     // Add date filters for current period
     if (start_date) {
       currentParamCount++;
@@ -336,6 +348,15 @@ router.get('/analytics', authenticateToken, async (req, res) => {
       WHERE 1=1
     `;
 
+    // Add branch filter for comparison period
+    if (branchFilter) {
+      comparisonParamCount++;
+      // Include orders with matching branch_code OR NULL (legacy orders without branch_code)
+      comparisonQuery += ` AND (o.branch_code = $${comparisonParamCount} OR o.branch_code IS NULL)`;
+      comparisonParams.push(branchFilter);
+    }
+    // If branchFilter is null (ALL selected), show all orders including NULL branch_code
+    
     // Add date filters for comparison period
     if (comparison_start_date) {
       comparisonParamCount++;
@@ -385,17 +406,59 @@ router.get('/analytics', authenticateToken, async (req, res) => {
       });
     }
 
-    // Calculate current period metrics
-    const currentSales = currentOrders.reduce((sum, order) => sum + (parseFloat(order.base_total) || 0), 0);
-    const currentOrdersCount = new Set(currentOrders.map(o => o.id)).size; // Unique orders
-    const currentAOV = currentOrdersCount > 0 ? currentSales / currentOrdersCount : 0;
-    const currentUniqueCustomers = new Set(currentOrders.map(o => o.customer_id).filter(Boolean)).size;
+    // Get unique orders (since we join with order_items, we get multiple rows per order)
+    const uniqueCurrentOrders = [];
+    const seenOrderIds = new Set();
+    currentOrders.forEach(order => {
+      if (!seenOrderIds.has(order.id)) {
+        seenOrderIds.add(order.id);
+        uniqueCurrentOrders.push(order);
+      }
+    });
 
-    // Calculate comparison period metrics
-    const comparisonSales = comparisonOrders.reduce((sum, order) => sum + (parseFloat(order.base_total) || 0), 0);
-    const comparisonOrdersCount = new Set(comparisonOrders.map(o => o.id)).size;
+    // Calculate current period metrics using unique orders only
+    const currentSales = uniqueCurrentOrders.reduce((sum, order) => {
+      let usdValue = parseFloat(order.base_total) || 0;
+      const ghsValue = parseFloat(order.total_amount_ghs) || 0;
+      
+      // If USD is 0 but GHS has a value, calculate USD from GHS
+      if (usdValue === 0 && ghsValue > 0) {
+        const rateToUse = order.exchange_rate || 16.0;
+        usdValue = ghsValue / rateToUse;
+      }
+      
+      return sum + usdValue;
+    }, 0);
+    const currentOrdersCount = uniqueCurrentOrders.length;
+    const currentAOV = currentOrdersCount > 0 ? currentSales / currentOrdersCount : 0;
+    const currentUniqueCustomers = new Set(uniqueCurrentOrders.map(o => o.customer_id).filter(Boolean)).size;
+
+    // Get unique orders for comparison period
+    const uniqueComparisonOrders = [];
+    const seenComparisonOrderIds = new Set();
+    comparisonOrders.forEach(order => {
+      if (!seenComparisonOrderIds.has(order.id)) {
+        seenComparisonOrderIds.add(order.id);
+        uniqueComparisonOrders.push(order);
+      }
+    });
+
+    // Calculate comparison period metrics using unique orders only
+    const comparisonSales = uniqueComparisonOrders.reduce((sum, order) => {
+      let usdValue = parseFloat(order.base_total) || 0;
+      const ghsValue = parseFloat(order.total_amount_ghs) || 0;
+      
+      // If USD is 0 but GHS has a value, calculate USD from GHS
+      if (usdValue === 0 && ghsValue > 0) {
+        const rateToUse = order.exchange_rate || 16.0;
+        usdValue = ghsValue / rateToUse;
+      }
+      
+      return sum + usdValue;
+    }, 0);
+    const comparisonOrdersCount = uniqueComparisonOrders.length;
     const comparisonAOV = comparisonOrdersCount > 0 ? comparisonSales / comparisonOrdersCount : 0;
-    const comparisonUniqueCustomers = new Set(comparisonOrders.map(o => o.customer_id).filter(Boolean)).size;
+    const comparisonUniqueCustomers = new Set(uniqueComparisonOrders.map(o => o.customer_id).filter(Boolean)).size;
 
     // Calculate percentage changes
     const salesChange = comparisonSales > 0 ? ((currentSales - comparisonSales) / comparisonSales) * 100 : 0;
@@ -404,26 +467,26 @@ router.get('/analytics', authenticateToken, async (req, res) => {
     const customersChange = comparisonUniqueCustomers > 0 ? ((currentUniqueCustomers - comparisonUniqueCustomers) / comparisonUniqueCustomers) * 100 : 0;
 
     // Calculate refund rate (simplified)
-    const refundedOrders = currentOrders.filter(order => order.status === 'cancelled').length;
+    const refundedOrders = uniqueCurrentOrders.filter(order => order.status === 'cancelled').length;
     const refundRate = currentOrdersCount > 0 ? (refundedOrders / currentOrdersCount) * 100 : 0;
 
-    // Generate time series data
-    const timeSeriesData = generateTimeSeriesData(currentOrders, start_date, end_date);
+    // Generate time series data (use unique orders)
+    const timeSeriesData = generateTimeSeriesData(uniqueCurrentOrders, start_date, end_date);
 
-    // Generate category data
+    // Generate category data (use all order items for category breakdown)
     const categoryData = generateCategoryData(currentOrders);
 
-    // Generate product performance data
+    // Generate product performance data (use all order items for product breakdown)
     const productData = generateProductPerformanceData(currentOrders);
 
-    // Generate payment method data
-    const paymentData = generatePaymentMethodData(currentOrders);
+    // Generate payment method data (use unique orders)
+    const paymentData = generatePaymentMethodData(uniqueCurrentOrders);
 
-    // Generate recent transactions
-    const recentTransactions = generateRecentTransactions(currentOrders);
+    // Generate recent transactions (use unique orders)
+    const recentTransactions = generateRecentTransactions(uniqueCurrentOrders);
 
-    // Generate top customers
-    const topCustomers = generateTopCustomers(currentOrders);
+    // Generate top customers (use unique orders)
+    const topCustomers = generateTopCustomers(uniqueCurrentOrders);
 
     const analytics = {
       metrics: {
@@ -457,7 +520,9 @@ router.get('/analytics', authenticateToken, async (req, res) => {
       totalOrders: currentOrdersCount,
       uniqueCustomers: currentUniqueCustomers,
       averageOrderValue: currentAOV,
-      refundRate: refundRate
+      refundRate: refundRate,
+      uniqueOrdersUsed: uniqueCurrentOrders.length,
+      rawOrdersCount: currentOrders.length
     });
 
     console.log('📊 Sales Analytics: Final metrics object:', analytics.metrics);
@@ -488,7 +553,18 @@ const generateTimeSeriesData = (orders, startDate, endDate) => {
       return orderDate === dateStr;
     });
     
-    const daySales = dayOrders.reduce((sum, order) => sum + (parseFloat(order.base_total) || 0), 0);
+    const daySales = dayOrders.reduce((sum, order) => {
+      let usdValue = parseFloat(order.base_total) || 0;
+      const ghsValue = parseFloat(order.total_amount_ghs) || 0;
+      
+      // If USD is 0 but GHS has a value, calculate USD from GHS
+      if (usdValue === 0 && ghsValue > 0) {
+        const rateToUse = order.exchange_rate || 16.0;
+        usdValue = ghsValue / rateToUse;
+      }
+      
+      return sum + usdValue;
+    }, 0);
     dataPoints.push(daySales);
   }
 
@@ -590,16 +666,27 @@ const generateRecentTransactions = (orders) => {
   return uniqueOrders
     .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .slice(0, 10)
-    .map(order => ({
-      id: order.order_number || order.id,
-      amount: parseFloat(order.base_total) || 0,
-      date: order.created_at,
-      customer: order.first_name && order.last_name 
-        ? `${order.first_name} ${order.last_name}`
-        : order.customer_email || 'Guest',
-      status: order.status,
-      payment_method: order.payment_method || 'Unknown'
-    }));
+    .map(order => {
+      let usdValue = parseFloat(order.base_total) || 0;
+      const ghsValue = parseFloat(order.total_amount_ghs) || 0;
+      
+      // If USD is 0 but GHS has a value, calculate USD from GHS
+      if (usdValue === 0 && ghsValue > 0) {
+        const rateToUse = order.exchange_rate || 16.0;
+        usdValue = ghsValue / rateToUse;
+      }
+      
+      return {
+        id: order.order_number || order.id,
+        amount: usdValue,
+        date: order.created_at,
+        customer: order.first_name && order.last_name 
+          ? `${order.first_name} ${order.last_name}`
+          : order.customer_email || 'Guest',
+        status: order.status,
+        payment_method: order.payment_method || 'Unknown'
+      };
+    });
 };
 
 // Helper function to generate top customers
@@ -632,7 +719,16 @@ const generateTopCustomers = (orders) => {
       };
     }
     
-    customerSales[customerId].totalSpent += parseFloat(order.base_total) || 0;
+    let usdValue = parseFloat(order.base_total) || 0;
+    const ghsValue = parseFloat(order.total_amount_ghs) || 0;
+    
+    // If USD is 0 but GHS has a value, calculate USD from GHS
+    if (usdValue === 0 && ghsValue > 0) {
+      const rateToUse = order.exchange_rate || 16.0;
+      usdValue = ghsValue / rateToUse;
+    }
+    
+    customerSales[customerId].totalSpent += usdValue;
     customerSales[customerId].orderCount += 1;
   });
 

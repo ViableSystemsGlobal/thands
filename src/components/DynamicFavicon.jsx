@@ -5,36 +5,88 @@ const DynamicFavicon = () => {
   const { settings, loading } = useSettings();
 
   useEffect(() => {
-    if (!loading && settings?.favicon_url) {
+    // Remove default favicon immediately, even while loading
+    const defaultFavicon = document.getElementById('default-favicon');
+    if (defaultFavicon) {
+      defaultFavicon.remove();
+    }
+    
+    if (loading) return;
+    
+    // Remove all existing favicon links first
+    const existingLinks = document.querySelectorAll('link[rel*="icon"], link[rel="shortcut icon"]');
+    existingLinks.forEach(link => {
+      link.remove();
+      if (link.parentNode) {
+        link.parentNode.removeChild(link);
+      }
+    });
+    
+    // Only add favicon if one is set in settings
+    if (settings?.favicon_url) {
       updateFavicon(settings.favicon_url);
     }
   }, [settings?.favicon_url, loading]);
 
   const updateFavicon = (faviconUrl) => {
+    if (!faviconUrl) {
+      // Remove all favicon links if no URL provided
+      const existingLinks = document.querySelectorAll('link[rel*="icon"], link[rel="shortcut icon"]');
+      existingLinks.forEach(link => {
+        link.remove();
+        if (link.parentNode) {
+          link.parentNode.removeChild(link);
+        }
+      });
+      return;
+    }
+
     // Remove existing favicon links
-    const existingLinks = document.querySelectorAll('link[rel*="icon"]');
-    existingLinks.forEach(link => link.remove());
+    const existingLinks = document.querySelectorAll('link[rel*="icon"], link[rel="shortcut icon"]');
+    existingLinks.forEach(link => {
+      link.remove();
+      if (link.parentNode) {
+        link.parentNode.removeChild(link);
+      }
+    });
 
-    // Create new favicon link
-    const link = document.createElement('link');
-    link.rel = 'icon';
-    link.type = getFaviconType(faviconUrl);
-    link.href = faviconUrl;
-    
-    // Add cache busting parameter
-    const url = new URL(faviconUrl);
-    url.searchParams.set('v', Date.now());
-    link.href = url.toString();
+    try {
+      // Handle both absolute and relative URLs
+      let url;
+      try {
+        url = new URL(faviconUrl);
+      } catch (e) {
+        url = new URL(faviconUrl, window.location.origin);
+      }
+      
+      // Add aggressive cache busting
+      const timestamp = Date.now();
+      url.searchParams.set('v', timestamp);
+      url.searchParams.set('t', timestamp);
+      const finalUrl = url.toString();
 
-    document.head.appendChild(link);
+      const faviconType = getFaviconType(faviconUrl);
 
-    // Also add apple-touch-icon for mobile devices
-    const appleLink = document.createElement('link');
-    appleLink.rel = 'apple-touch-icon';
-    appleLink.href = url.toString();
-    document.head.appendChild(appleLink);
+      // Create multiple favicon link types for better browser compatibility
+      const linkTypes = [
+        { rel: 'icon', type: faviconType },
+        { rel: 'shortcut icon', type: faviconType },
+        { rel: 'apple-touch-icon', type: faviconType }
+      ];
 
-    console.log('🎨 Favicon updated:', faviconUrl);
+      linkTypes.forEach(({ rel, type }) => {
+        const link = document.createElement('link');
+        link.rel = rel;
+        link.type = type;
+        link.href = finalUrl;
+        // Insert at the beginning of head for priority
+        document.head.insertBefore(link, document.head.firstChild);
+      });
+
+      console.log('🎨 DynamicFavicon: Favicon updated:', finalUrl);
+    } catch (error) {
+      console.error('Error updating favicon:', error);
+    }
   };
 
   const getFaviconType = (url) => {

@@ -33,8 +33,11 @@ const RelatedProducts = ({ products }) => {
       <h2 className="text-2xl font-light mb-8">Related products</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {randomProducts.map((relatedProduct) => {
+          // Calculate price: base_price + price_adjustment (same logic as ProductCardApi)
           const defaultSizeInfo = relatedProduct.product_sizes?.find(size => size.size === 'M') || relatedProduct.product_sizes?.[0];
-          const defaultPrice = defaultSizeInfo?.price;
+          const basePrice = relatedProduct.base_price || 0;
+          const priceAdjustment = defaultSizeInfo?.price_adjustment || 0;
+          const totalPrice = basePrice + priceAdjustment;
 
           return (
             <Link 
@@ -50,7 +53,9 @@ const RelatedProducts = ({ products }) => {
                 />
               </div>
               <h3 className="font-medium mb-2">{relatedProduct.name}</h3>
-              <p className="text-gray-600">{defaultPrice ? formatPrice(defaultPrice) : 'Price unavailable'}</p>
+              <p className="text-gray-600">
+                {totalPrice > 0 ? formatPrice(totalPrice) : 'Price unavailable'}
+              </p>
             </Link>
           );
         })}

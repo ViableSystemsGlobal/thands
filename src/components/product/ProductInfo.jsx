@@ -3,6 +3,7 @@ import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Heart } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useCurrency } from "@/context/CurrencyContext";
 
 const SIZE_GUIDE = {
@@ -15,8 +16,38 @@ const SIZE_GUIDE = {
   XXXXL: { chest: "54", waist: "46-48" }
 };
 
+// Size order for sorting
+const SIZE_ORDER = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'XXXXL'];
+
+// Function to sort sizes in standard order
+const sortSizes = (sizes) => {
+  if (!sizes || sizes.length === 0) return [];
+  
+  return [...sizes].sort((a, b) => {
+    const sizeA = String(a.size || a.size_name || '').toUpperCase();
+    const sizeB = String(b.size || b.size_name || '').toUpperCase();
+    
+    const indexA = SIZE_ORDER.indexOf(sizeA);
+    const indexB = SIZE_ORDER.indexOf(sizeB);
+    
+    // If both sizes are in the order list, sort by their position
+    if (indexA !== -1 && indexB !== -1) {
+      return indexA - indexB;
+    }
+    // If only one is in the list, prioritize it
+    if (indexA !== -1) return -1;
+    if (indexB !== -1) return 1;
+    // If neither is in the list, sort alphabetically
+    return sizeA.localeCompare(sizeB);
+  });
+};
+
 const ProductInfo = ({ product, sizes, selectedSize, currentPrice, onSizeSelect, onAddToCart, onToggleWishlist, isInWishlist }) => {
   const { formatPrice } = useCurrency();
+  
+  // Sort sizes in standard order
+  const sortedSizes = React.useMemo(() => sortSizes(sizes), [sizes]);
+
 
   if (!product) {
     // This component should ideally not render if product is null. 
@@ -40,22 +71,30 @@ const ProductInfo = ({ product, sizes, selectedSize, currentPrice, onSizeSelect,
 
       {sizes && sizes.length > 0 && (
         <div>
-          <h3 className="text-lg font-medium mb-4 text-gray-800 dark:text-gray-100">Select Size</h3>
-          <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-            {sizes.map((size) => (
-              <Button
-                key={size.size}
-                variant={selectedSize?.size === size.size ? "default" : "outline"}
-                className={`transition-colors duration-200 ease-in-out ${selectedSize?.size === size.size 
-                  ? "bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900" 
-                  : "border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
-                }`}
-                onClick={() => onSizeSelect(size)}
-              >
-                {size.size}
-              </Button>
-            ))}
-          </div>
+          <h3 className="text-lg font-medium mb-3 text-gray-800 dark:text-gray-100">Select Size</h3>
+          <Select
+            value={selectedSize?.size ? String(selectedSize.size) : ""}
+            onValueChange={(value) => {
+              const size = sortedSizes.find(s => String(s.size) === String(value));
+              if (size && onSizeSelect) {
+                onSizeSelect(size);
+              }
+            }}
+          >
+            <SelectTrigger className="w-32 h-10 text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-slate-800">
+              <SelectValue placeholder="Size" />
+            </SelectTrigger>
+            <SelectContent className="max-h-[200px]">
+              {sortedSizes.map((size) => {
+                const sizeValue = size.size || size.size_name || size;
+                return (
+                  <SelectItem key={sizeValue} value={String(sizeValue)}>
+                    {sizeValue}
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
         </div>
       )}
 

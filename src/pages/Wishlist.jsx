@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { ShoppingBag, Loader2, Trash2, Check } from "lucide-react";
+import { ShoppingBag, Loader2, Trash2 } from "lucide-react";
 import { useShop } from "@/context/ShopContext";
 import { useToast } from "@/components/ui/use-toast";
 import { Link } from "react-router-dom";
@@ -26,15 +26,27 @@ const Wishlist = () => {
     
     try {
       setLoadingSizes(true);
-      setSelectedProduct(product);
+      
+      // Fetch full product details to ensure we have base_price
+      const { api } = await import('@/lib/services/api');
+      const fullProduct = await api.get(`/products/${product.id}`);
+      
+      // Merge full product data with existing product data
+      const productWithDetails = {
+        ...product,
+        ...fullProduct,
+        base_price: fullProduct.base_price || fullProduct.price || product.price || 0
+      };
+      
+      setSelectedProduct(productWithDetails);
 
       const sizes = await productSizesApi.fetchProductSizes(product.id);
       setProductSizes(sizes || []);
     } catch (error) {
-      console.error("Error fetching sizes:", error);
+      console.error("Error fetching product details or sizes:", error);
       toast({
         title: "Error",
-        description: "Failed to load product sizes",
+        description: "Failed to load product details",
         variant: "destructive",
       });
     } finally {
@@ -47,42 +59,15 @@ const Wishlist = () => {
     
     try {
       setAddingToCartId(selectedProduct.id);
+      // addToCart already shows the standard toast notification
       await addToCart(selectedProduct, size);
       
-      toast({
-        title: (
-          <div className="flex items-center gap-2">
-            <div className="h-6 w-6 rounded-full bg-green-600 flex items-center justify-center">
-              <Check className="h-4 w-4 text-white" />
-            </div>
-            Added to Cart
-          </div>
-        ),
-        description: (
-          <div className="mt-2 flex items-start gap-4">
-            <img 
-              src={getImageUrl(selectedProduct.image_url) || getPlaceholderImageUrl()} 
-              alt={selectedProduct.name} 
-              className="h-16 w-16 object-cover rounded"
-            />
-            <div>
-              <p className="font-medium">{selectedProduct.name}</p>
-              <p className="text-sm text-gray-500">Size: {size.size}</p>
-              <p className="text-sm font-medium">${size.price}</p>
-            </div>
-          </div>
-        ),
-        className: "bg-white border-green-100 shadow-lg",
-      });
-      
+      // Close the dialog after successful addition
       setSelectedProduct(null);
       setProductSizes([]);
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to add item to cart",
-        variant: "destructive",
-      });
+      // Error toast is also handled by addToCart, but we can add a fallback
+      console.error("Error adding to cart:", error);
     } finally {
       setAddingToCartId(null);
     }

@@ -4,10 +4,10 @@ import { X, AlertCircle, Star, Loader2, Shirt, Ruler } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { productSizesApi } from "@/lib/services/productSizesApi";
-import { uploadProductImage, deleteProductImage } from "@/lib/storage";
+import { uploadProductImage, deleteProductImage } from "@/lib/services/uploadApi";
 import { getImageUrl } from "@/lib/utils/imageUtils";
 import { createProduct, updateProduct } from "@/lib/services/adminApi";
-import exchangeRateService from "@/lib/services/exchangeRate";
+import exchangeRateService, { loadExchangeRateFromSettings } from "@/lib/services/exchangeRate";
 
 const SIZES = ["S", "M", "L", "XL", "XXL", "XXXL", "XXXXL"];
 
@@ -28,6 +28,9 @@ const ProductDialog = ({ isOpen, onClose, product, onSuccess }) => {
     image: null,
     is_featured: false,
     image_url: "",
+    weight: 0,
+    stock_quantity: 0,
+    sku: "",
     sizes: SIZES.map(size => ({ size, price: "" }))
   });
 
@@ -35,7 +38,7 @@ const ProductDialog = ({ isOpen, onClose, product, onSuccess }) => {
     // Load current exchange rate and subscribe to changes
     const loadExchangeRate = async () => {
       // Ensure the exchange rate is loaded from the API
-      await exchangeRateService.loadExchangeRateFromSettings();
+      await loadExchangeRateFromSettings();
       const currentRate = exchangeRateService.getExchangeRate();
       setExchangeRate(currentRate);
       console.log('📊 ProductDialog loaded exchange rate:', currentRate);
@@ -61,6 +64,9 @@ const ProductDialog = ({ isOpen, onClose, product, onSuccess }) => {
         image: null,
         is_featured: product.is_featured || false,
         image_url: product.image_url || "",
+        weight: product.weight || 0,
+        stock_quantity: product.stock_quantity || 0,
+        sku: product.sku || "",
         sizes: SIZES.map(size => ({ size, price: "" }))
       });
 
@@ -77,6 +83,9 @@ const ProductDialog = ({ isOpen, onClose, product, onSuccess }) => {
         image: null,
         is_featured: false,
         image_url: "",
+        weight: 0,
+        stock_quantity: 0,
+        sku: "",
         sizes: SIZES.map(size => ({ size, price: "" }))
       });
     }
@@ -184,11 +193,16 @@ const ProductDialog = ({ isOpen, onClose, product, onSuccess }) => {
 
       if (formData.image) {
         const uploadResult = await uploadProductImage(formData.image);
-        if (uploadResult.error) throw uploadResult.error;
-        imageUrl = uploadResult.url;
+        if (uploadResult.error || !uploadResult.success) {
+          throw new Error(uploadResult.error || 'Failed to upload image');
+        }
+        imageUrl = uploadResult.url || uploadResult.imageUrl;
 
-        if (product?.image_url) {
-          await deleteProductImage(product.image_url);
+        // Delete old image if it exists (non-blocking)
+        if (product?.image_url && !product.image_url.includes('supabase.co')) {
+          deleteProductImage(product.image_url).catch(err => {
+            console.warn('Failed to delete old image:', err);
+          });
         }
       }
 
@@ -446,6 +460,46 @@ const ProductDialog = ({ isOpen, onClose, product, onSuccess }) => {
               {errors.product_type && (
                 <p className="text-red-500 text-sm mt-1">{errors.product_type}</p>
               )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block mb-2">Weight (lbs)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={formData.weight || 0}
+                  onChange={(e) => setFormData(prev => ({ ...prev, weight: parseFloat(e.target.value) || 0 }))}
+                  className="w-full p-2 border rounded"
+                  placeholder="0.5"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Product weight in pounds (used for shipping calculations)
+                </p>
+              </div>
+              <div>
+                <label className="block mb-2">Stock Quantity</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={formData.stock_quantity || 0}
+                  onChange={(e) => setFormData(prev => ({ ...prev, stock_quantity: parseInt(e.target.value) || 0 }))}
+                  className="w-full p-2 border rounded"
+                  placeholder="0"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block mb-2">SKU (Optional)</label>
+              <input
+                type="text"
+                value={formData.sku || ""}
+                onChange={(e) => setFormData(prev => ({ ...prev, sku: e.target.value }))}
+                className="w-full p-2 border rounded"
+                placeholder="Product SKU"
+              />
             </div>
 
             <div>

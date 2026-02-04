@@ -20,7 +20,8 @@ const CheckoutOrderSummary = ({
   couponLoading,
   showSubmitButton = true,
   submitButtonText = "Continue to Order Verification",
-  onSubmit
+  onSubmit,
+  selectedShipping
 }) => {
   const { cart, cartTotal, cartItemsCount } = useShop();
   const { formatPrice, currency } = useCurrency(); 
@@ -29,7 +30,32 @@ const CheckoutOrderSummary = ({
   const displayCurrency = currency; 
 
   const subtotal = cartTotal;
-  const shippingCost = calculatedShippingCost || (shippingRule?.shipping_cost ?? 0);
+  
+  // Use selectedShipping (DHL/manual) if available, otherwise use local shipping rules
+  // DHL rates use .cost, manual/Shippo-style may use .amount
+  const calculatedCost = calculatedShippingCost !== undefined && calculatedShippingCost !== null 
+    ? parseFloat(calculatedShippingCost) 
+    : 0;
+  const ruleCost = shippingRule?.shipping_cost 
+    ? parseFloat(shippingRule.shipping_cost) 
+    : 0;
+  
+  const selectedAmount = selectedShipping?.amount ?? selectedShipping?.cost;
+  const shippingCost = selectedAmount !== undefined && selectedAmount !== null
+    ? parseFloat(selectedAmount)
+    : (calculatedCost || ruleCost);
+  
+  console.log('📦 OrderSummary shipping calculation:', {
+    selectedShipping: selectedShipping?.amount,
+    calculatedShippingCost,
+    calculatedCost,
+    shippingRule,
+    shippingRuleCost: shippingRule?.shipping_cost,
+    ruleCost,
+    finalShippingCost: shippingCost,
+    shippingCostType: typeof shippingCost
+  });
+    
   const totalBeforeDiscount = subtotal + shippingCost;
   const finalDiscount = couponDiscount || 0;
   const total = totalBeforeDiscount - finalDiscount;
@@ -86,9 +112,21 @@ const CheckoutOrderSummary = ({
           <span className="text-gray-800 font-medium">{formatPrice(subtotal)}</span>
         </div>
         <div className="flex justify-between text-sm">
-          <span className="text-gray-600">Shipping</span>
+          <span className="text-gray-600">
+            {selectedShipping ? `Shipping (${selectedShipping.service || selectedShipping.carrier || 'Standard'})` : 'Shipping'}
+          </span>
           <span className="text-gray-800 font-medium">
-            {shippingRule ? formatPrice(shippingCost) : (shippingRule === null && cart.length > 0 ? "Select country" : "N/A")}
+            {shippingCost > 0 
+              ? formatPrice(shippingCost) 
+              : (calculatedCost > 0 
+                  ? formatPrice(calculatedCost) 
+                  : (ruleCost > 0 
+                      ? formatPrice(ruleCost) 
+                      : (shippingRule && (formLoading || calculatedShippingCost === undefined)
+                          ? "Calculating..." 
+                          : (cart.length > 0 && !shippingRule && !selectedShipping
+                              ? "Select country"
+                              : "N/A"))))}
           </span>
         </div>
 
@@ -110,7 +148,7 @@ const CheckoutOrderSummary = ({
                 variant="outline"
                 size="sm"
                 onClick={handleApplyCoupon}
-                disabled={couponLoading || !couponCode.trim()}
+                disabled={couponLoading || !(couponCode || '').trim()}
                 className="h-9"
               >
                 {couponLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Apply'}
@@ -148,7 +186,7 @@ const CheckoutOrderSummary = ({
             <div className="flex justify-between text-xs text-gray-500">
               <span>Shipping (GHS)</span>
               <span>
-                {shippingRule ? `~${formatPrice(shippingCost, false, "GHS")}` : (shippingRule === null && cart.length > 0 ? "Select country" : "N/A")}
+                {shippingCost > 0 ? `~${formatPrice(shippingCost, false, "GHS")}` : (shippingRule ? `~${formatPrice(ruleCost, false, "GHS")}` : (cart.length > 0 && !selectedShipping ? "Select country" : "N/A"))}
               </span>
             </div>
             {appliedCoupon && (

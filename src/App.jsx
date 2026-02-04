@@ -6,6 +6,7 @@ import { ShopProvider } from "@/context/ShopContext";
 import { AuthProvider } from "@/hooks/useAuth";
 import { AdminAuthProvider } from "@/hooks/useAdminAuth";
 import { CurrencyProvider } from "@/context/CurrencyContext";
+import { BranchProvider } from "@/context/BranchContext";
 import DynamicFavicon from "@/components/DynamicFavicon";
 import MainRoutes from "@/routes/MainRoutes";
 import AdminRoutes from "@/routes/AdminRoutes";
@@ -27,8 +28,9 @@ function App() {
         The necessary provider is already at a higher level.
       */}
       <AuthProvider>
-        <CurrencyProvider>
-          <DynamicFavicon />
+        <BranchProvider>
+          <CurrencyProvider>
+            <DynamicFavicon />
           <Suspense fallback={
             <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 text-white">
               <div className="animate-spin rounded-full h-32 w-32 border-t-4 border-b-4 border-purple-500"></div>
@@ -42,14 +44,13 @@ function App() {
                 </AdminAuthProvider>
               } />
               <Route path="/*" element={
-                <ShopProvider>
-                  <MainRoutes />
-                </ShopProvider>
+                <MainRoutes />
               } />
             </Routes>
             <Toaster />
           </Suspense>
-        </CurrencyProvider>
+          </CurrencyProvider>
+        </BranchProvider>
       </AuthProvider>
     </BrowserRouter>
   );

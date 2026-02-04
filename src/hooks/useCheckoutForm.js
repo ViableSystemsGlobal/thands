@@ -22,6 +22,7 @@ export const useCheckoutForm = () => {
   const [initializationComplete, setInitializationComplete] = useState(false);
   const [authCustomer, setAuthCustomer] = useState(null);
   const [overallLoading, setOverallLoading] = useState(true);
+  const [selectedShipping, setSelectedShipping] = useState(null);
 
   // Debug cart and loading states
   useEffect(() => {
@@ -71,6 +72,7 @@ export const useCheckoutForm = () => {
     formErrors, 
     shippingRule,
     calculatedShippingCost,
+    totalWeight,
     handleInputChange,
     setSelectedAddress,
     validateForm,
@@ -83,7 +85,9 @@ export const useCheckoutForm = () => {
     createAccount, 
     cartTotal, 
     shippingRules, 
-    authCustomer
+    authCustomer,
+    cart, // Pass cart items for weight calculation
+    selectedShipping // Pass selected DHL/international shipping
   );
 
   const {
@@ -101,10 +105,24 @@ export const useCheckoutForm = () => {
     processPaymentFirst,
   } = usePaymentFirst();
 
-  const baseSubtotal = cartTotal;
-  const shippingCost = calculatedShippingCost || 0;
+  // Ensure all values are valid numbers to prevent NaN issues
+  const baseSubtotal = typeof cartTotal === 'number' && !isNaN(cartTotal) ? cartTotal : 0;
+  const shippingCost = typeof calculatedShippingCost === 'number' && !isNaN(calculatedShippingCost) ? calculatedShippingCost : 0;
+  const discountAmount = typeof couponDiscount === 'number' && !isNaN(couponDiscount) ? couponDiscount : 0;
   const totalBeforeDiscount = baseSubtotal + shippingCost;
-  const totalAmount = totalBeforeDiscount - couponDiscount;
+  const totalAmount = Math.max(0, totalBeforeDiscount - discountAmount);
+  
+  // Debug cart total calculation
+  console.log('🧮 Checkout totals:', {
+    cartTotal,
+    baseSubtotal,
+    calculatedShippingCost,
+    shippingCost,
+    couponDiscount,
+    discountAmount,
+    totalBeforeDiscount,
+    totalAmount
+  });
 
   const handleSubmit = async (e) => {
     if (e && e.preventDefault) {
@@ -126,6 +144,11 @@ export const useCheckoutForm = () => {
       validateForm,
       clearValidationErrors
     );
+  };
+
+  const handleShippingSelected = (shipping) => {
+    setSelectedShipping(shipping);
+    console.log('🚢 Selected shipping:', shipping);
   };
 
   // overallLoading is now managed by state above
@@ -176,5 +199,7 @@ export const useCheckoutForm = () => {
     handleApplyCoupon,
     handleRemoveCoupon,
     validateForm,
+    selectedShipping,
+    handleShippingSelected,
   };
 };

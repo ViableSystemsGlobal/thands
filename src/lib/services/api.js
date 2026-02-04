@@ -23,6 +23,16 @@ const getAuthToken = () => {
 };
 
 /**
+ * Get branch code from localStorage or window
+ */
+const getBranchCode = () => {
+  if (typeof window !== 'undefined') {
+    return window.__branchCode || localStorage.getItem('branch_code') || 'GH';
+  }
+  return 'GH';
+};
+
+/**
  * Make HTTP request with error handling
  */
 const makeRequest = async (url, options = {}, customToken = null) => {
@@ -40,6 +50,12 @@ const makeRequest = async (url, options = {}, customToken = null) => {
   // Add auth token if available
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+
+  // Add branch code header
+  const branchCode = getBranchCode();
+  if (branchCode) {
+    config.headers['X-Branch-Code'] = branchCode;
   }
 
   try {

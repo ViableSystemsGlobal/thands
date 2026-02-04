@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -10,10 +10,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MultiSelect } from "@/components/ui/multi-select";
 import { countries } from "@/lib/location-data";
 import { cn } from "@/lib/utils";
-import { Loader2 } from "lucide-react";
+import { Loader2, Search, Check, X } from "lucide-react";
 
 const initialFormData = {
   name: "",
@@ -22,9 +21,146 @@ const initialFormData = {
   min_amount: "",
   max_amount: "",
   shipping_fee: "",
+  per_kg_rate: "",
   delivery_time: "",
   carrier: "",
   is_active: true,
+};
+
+// Simple inline country selector component
+const CountrySelector = ({ selected, onChange }) => {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const filteredCountries = useMemo(() => {
+    if (!searchQuery) return countries;
+    return countries.filter(country =>
+      country.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [searchQuery]);
+
+  const toggleCountry = (country) => {
+    const newSelected = selected.includes(country)
+      ? selected.filter(c => c !== country)
+      : [...selected, country];
+    onChange(newSelected);
+  };
+
+  const selectAll = () => {
+    onChange([...countries]);
+  };
+
+  const clearAll = () => {
+    onChange([]);
+  };
+
+  return (
+    <div className="border rounded-md bg-white">
+      {/* Selected Countries Display */}
+      {selected.length > 0 && (
+        <div className="p-2 border-b bg-gray-50 flex flex-wrap gap-1">
+          {selected.slice(0, 3).map(country => (
+            <span 
+              key={country} 
+              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-800"
+            >
+              {country}
+              <button
+                type="button"
+                onClick={() => toggleCountry(country)}
+                className="ml-1 hover:text-blue-600"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+          {selected.length > 3 && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-200 text-gray-600">
+              +{selected.length - 3} more
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Toggle Button */}
+      <button
+        type="button"
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full p-2 text-left text-sm flex items-center justify-between hover:bg-gray-50"
+      >
+        <span className="text-gray-600">
+          {selected.length === 0 
+            ? "Click to select countries (leave empty for international)" 
+            : `${selected.length} country(ies) selected`}
+        </span>
+        <span className="text-gray-400">{isExpanded ? "▲" : "▼"}</span>
+      </button>
+
+      {/* Expanded Country List */}
+      {isExpanded && (
+        <div className="border-t">
+          {/* Search */}
+          <div className="p-2 border-b">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search countries..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-8 pr-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          {/* Select All / Clear All */}
+          <div className="flex items-center justify-between p-2 border-b bg-gray-50">
+            <button
+              type="button"
+              onClick={selectAll}
+              className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+            >
+              Select All
+            </button>
+            <button
+              type="button"
+              onClick={clearAll}
+              className="text-xs text-red-600 hover:text-red-800 font-medium"
+            >
+              Clear All
+            </button>
+          </div>
+
+          {/* Country List */}
+          <div 
+            className="overflow-y-auto"
+            style={{ maxHeight: '200px' }}
+          >
+            {filteredCountries.length === 0 ? (
+              <div className="p-4 text-center text-sm text-gray-500">
+                No countries found
+              </div>
+            ) : (
+              filteredCountries.map(country => (
+                <label
+                  key={country}
+                  className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(country)}
+                    onChange={() => toggleCountry(country)}
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="ml-2 text-sm text-gray-700">{country}</span>
+                </label>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 const ShippingRuleFormDialog = ({ isOpen, onOpenChange, onSubmit, initialData, onClose }) => {
@@ -42,6 +178,7 @@ const ShippingRuleFormDialog = ({ isOpen, onOpenChange, onSubmit, initialData, o
         min_amount: initialData.min_amount?.toString() || "",
         max_amount: initialData.max_amount?.toString() || "",
         shipping_fee: initialData.shipping_fee?.toString() || "",
+        per_kg_rate: initialData.per_kg_rate?.toString() || "",
         delivery_time: initialData.delivery_time || "",
         carrier: initialData.carrier || "",
         is_active: initialData.is_active !== undefined ? initialData.is_active : true,
@@ -108,10 +245,9 @@ const ShippingRuleFormDialog = ({ isOpen, onOpenChange, onSubmit, initialData, o
     onOpenChange(false);
   };
 
-
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEditing ? "Edit Shipping Rule" : "Add Shipping Rule"}</DialogTitle>
           <DialogDescription>
@@ -134,14 +270,11 @@ const ShippingRuleFormDialog = ({ isOpen, onOpenChange, onSubmit, initialData, o
           </div>
 
           <div>
-            <Label htmlFor="countries" className="font-medium text-gray-700">Countries</Label>
+            <Label className="font-medium text-gray-700">Countries</Label>
             <div className="mt-1">
-              <MultiSelect
-                items={countries}
+              <CountrySelector
                 selected={formData.countries}
                 onChange={handleCountriesChange}
-                placeholder="Select countries (leave empty for international)"
-                searchPlaceholder="Search countries..."
               />
             </div>
             {formErrors.countries && <p className="text-xs text-red-500 mt-1">{formErrors.countries}</p>}
@@ -192,20 +325,40 @@ const ShippingRuleFormDialog = ({ isOpen, onOpenChange, onSubmit, initialData, o
             </div>
           </div>
 
-          <div>
-            <Label htmlFor="shipping_fee" className="font-medium text-gray-700">Shipping Fee (USD)</Label>
-            <Input
-              id="shipping_fee"
-              name="shipping_fee"
-              type="number"
-              step="0.01"
-              value={formData.shipping_fee}
-              onChange={handleInputChange}
-              placeholder="0.00"
-              className="mt-1"
-              required
-            />
-            {formErrors.shipping_fee && <p className="text-xs text-red-500 mt-1">{formErrors.shipping_fee}</p>}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="per_kg_rate" className="font-medium text-gray-700">Rate per Kg (USD)</Label>
+              <Input
+                id="per_kg_rate"
+                name="per_kg_rate"
+                type="number"
+                step="0.01"
+                value={formData.per_kg_rate}
+                onChange={handleInputChange}
+                placeholder="0.00"
+                className="mt-1"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Price per kilogram of weight
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="shipping_fee" className="font-medium text-gray-700">Base Fee (USD)</Label>
+              <Input
+                id="shipping_fee"
+                name="shipping_fee"
+                type="number"
+                step="0.01"
+                value={formData.shipping_fee}
+                onChange={handleInputChange}
+                placeholder="0.00"
+                className="mt-1"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Fallback if no per-kg rate
+              </p>
+              {formErrors.shipping_fee && <p className="text-xs text-red-500 mt-1">{formErrors.shipping_fee}</p>}
+            </div>
           </div>
 
           <div>

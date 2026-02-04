@@ -41,15 +41,10 @@ const NewsletterPopup = () => {
 
   const loadNewsletterConfig = async () => {
     try {
-      const { data, error } = await supabase
-        .from('newsletter_settings')
-        .select('*')
-        .eq('id', 1)
-        .single();
-      
-      if (data && !error) {
-        setNewsletterConfig(data);
-      }
+      // Supabase is disabled - using default config
+      // TODO: If needed, fetch from backend API instead
+      // const response = await api.get('/newsletter/config');
+      // if (response.success) setNewsletterConfig(response.config);
     } catch (error) {
       console.log('Using default newsletter config:', error);
       // Use default config if table doesn't exist yet
@@ -162,7 +157,7 @@ const NewsletterPopup = () => {
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.8, opacity: 0 }}
           transition={{ duration: 0.3 }}
-          className="bg-white rounded-2xl shadow-2xl overflow-hidden max-w-md w-full max-h-[90vh] overflow-y-auto"
+          className="relative bg-white rounded-2xl shadow-2xl overflow-hidden max-w-md w-full max-h-[90vh] overflow-y-auto"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Close button */}

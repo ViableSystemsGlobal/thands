@@ -14,6 +14,7 @@ export const CurrencySelect = () => {
       <SelectContent>
         <SelectItem value="USD">USD ($)</SelectItem>
         <SelectItem value="GHS">GHS (₵)</SelectItem>
+        <SelectItem value="GBP">GBP (£)</SelectItem>
       </SelectContent>
     </Select>
   );

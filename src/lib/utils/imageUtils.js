@@ -21,10 +21,18 @@ export const getImageUrl = (imagePath, size = 'medium') => {
     ? 'https://your-domain.com'  // Update this for production deployment
     : 'http://localhost:3003';
   
+  // Remove leading slash if present to avoid double slashes
+  let cleanPath = imagePath.startsWith('/') ? imagePath.substring(1) : imagePath;
+  
+  // Remove 'uploads/' prefix if present since /api/images already serves from uploads directory
+  if (cleanPath.startsWith('uploads/')) {
+    cleanPath = cleanPath.substring('uploads/'.length);
+  }
+  
   // Add size parameter for optimization
   const sizeParam = size && size !== 'original' ? `?size=${size}` : '';
   
-  return `${backendUrl}/api/images/${imagePath}${sizeParam}`;
+  return `${backendUrl}/api/images/${cleanPath}${sizeParam}`;
 };
 
 /**

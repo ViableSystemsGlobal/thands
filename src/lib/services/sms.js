@@ -1,218 +1,211 @@
-// SMS service - temporarily disabled until backend SMS config is implemented
-export async function getSMSConfig() {
+import { API_BASE_URL } from './api';
+
+/**
+ * SMS Service using Deywuro API
+ * Based on: https://www.deywuro.com/NewUI/Landing/images/NPONTU_SMS_API_DOCUMENT_NEW.pdf
+ */
+
+// SMS Configuration
+const SMS_CONFIG = {
+  apiUrl: 'https://deywuro.com/api/sms',
+  // These should be stored in environment variables or database
+  defaultUsername: '',
+  defaultPassword: '',
+  defaultSource: 'T-Hands' // Max 11 characters (7 chars) - should be set in admin settings
+};
+
+/**
+ * Send SMS using Backend API (routes through Deywuro)
+ * @param {Object} smsData - SMS data object
+ * @param {string} smsData.destination - Phone numbers (comma separated)
+ * @param {string} smsData.source - Sender name (max 11 chars)
+ * @param {string} smsData.message - SMS content
+ * @returns {Promise<Object>} API response
+ */
+export const sendSMS = async (smsData) => {
   try {
-    // TODO: Implement SMS config endpoint in backend
-    // For now, return default config or disable SMS
-    console.log('📱 SMS service temporarily disabled - backend config not implemented yet');
-    return null;
+    const {
+      destination,
+      source = SMS_CONFIG.defaultSource,
+      message
+    } = smsData;
+
+    // Validate required fields
+    if (!destination || !message) {
+      throw new Error('Destination and message are required');
+    }
+
+    // Validate source length (max 11 characters)
+    if (source && source.length > 11) {
+      throw new Error('Source must be 11 characters or less');
+    }
+
+    console.log('📱 SMS Service: Sending SMS via backend API');
+    console.log('📱 SMS Service: Destination:', destination);
+    console.log('📱 SMS Service: Source:', source);
+    console.log('📱 SMS Service: Message length:', message.length);
+
+    // Use backend API to send SMS (handles credentials securely)
+    const response = await fetch(`${API_BASE_URL}/notifications/send/sms`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        destination,
+        source,
+        message
+      })
+    });
+
+    const result = await response.json();
+    
+    console.log('📱 SMS Service: Backend API Response:', result);
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.error || result.details || 'SMS sending failed');
+    }
+
+    return {
+      success: true,
+      message: result.message || 'SMS sent successfully'
+    };
+
   } catch (error) {
-    console.error('Error fetching SMS config:', error);
+    console.error('📱 SMS Service Error:', error);
     throw error;
   }
-}
+};
 
-export async function sendSMS({ destination, message }) {
+/**
+ * Send SMS through our backend (recommended for production)
+ * @param {Object} smsData - SMS data object
+ * @returns {Promise<Object>} API response
+ */
+export const sendSMSViaBackend = async (smsData) => {
   try {
-    const config = await getSMSConfig();
-    if (!config) {
-      console.log('📱 SMS service disabled - skipping SMS send to', destination);
-      return { success: true, message: 'SMS service disabled' };
-    }
-
-    let response;
-
-    // Twilio SMS
-    if (config.service === 'Twilio' && config.account_sid && config.auth_token) {
-      const body = new URLSearchParams({
-        To: destination,
-        From: config.from_number,
-        Body: message
-      });
-
-      response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${config.account_sid}/Messages.json`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Authorization': `Basic ${btoa(`${config.account_sid}:${config.auth_token}`)}`
-        },
-        body: body
-      });
-    }
-    // Africa's Talking SMS (popular in Africa, good for Ghana)
-    else if (config.service === 'AfricasTalking' && config.api_key && config.username) {
-      response = await fetch('https://api.africastalking.com/version1/messaging', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'apiKey': config.api_key,
-          'Accept': 'application/json'
-        },
-        body: new URLSearchParams({
-          username: config.username,
-          to: destination,
-          message: message,
-          from: config.from_number || config.sender_id || ''
-        })
-      });
-    }
-    // Vonage (formerly Nexmo) SMS
-    else if (config.service === 'Vonage' && config.api_key && config.api_secret) {
-      response = await fetch('https://rest.nexmo.com/sms/json', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          from: config.from_number || config.sender_id || 'TailoredHands',
-          to: destination,
-          text: message,
-          api_key: config.api_key,
-          api_secret: config.api_secret
-        })
-      });
-    }
-    // Termii (popular in Nigeria/West Africa)
-    else if (config.service === 'Termii' && config.api_key) {
-      response = await fetch('https://api.ng.termii.com/api/sms/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          to: destination,
-          from: config.sender_id || 'TailoredHands',
-          sms: message,
-          type: 'plain',
-          api_key: config.api_key,
-          channel: 'generic'
-        })
-      });
-    }
-    // Custom SMS API endpoint
-    else if (config.service === 'Custom' && config.custom_api_url) {
-      const requestBody = {
-        to: destination,
-        message: message,
-        from: config.from_number || config.sender_id
-      };
-
-      // Add any custom headers or auth
-      const headers = {
-        'Content-Type': 'application/json'
-      };
-
-      if (config.api_key) {
-        if (config.auth_type === 'bearer') {
-          headers['Authorization'] = `Bearer ${config.api_key}`;
-        } else if (config.auth_type === 'api-key') {
-          headers['X-API-Key'] = config.api_key;
-        } else {
-          headers['Authorization'] = config.api_key;
-        }
-      }
-
-      response = await fetch(config.custom_api_url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(requestBody)
-      });
-    }
-    else {
-      throw new Error('Invalid SMS service configuration');
-    }
-
-    // Parse response
-    let data;
-    try {
-      const responseText = await response.text();
-      data = responseText ? JSON.parse(responseText) : {};
-    } catch (e) {
-      data = { message: 'SMS sent successfully' };
-    }
+    console.log('📱 SMS Service: Sending SMS via backend');
     
+    const response = await fetch(`${API_BASE_URL}/sms/send`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('admin_auth_token')}`
+      },
+      body: JSON.stringify(smsData)
+    });
+
     if (!response.ok) {
-      throw new Error(data.message || data.error_message || data.error || 'Failed to send SMS');
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
     }
 
-    return {
-      success: true,
-      message: 'SMS sent successfully',
-      data: data
-    };
+    const result = await response.json();
+    console.log('📱 SMS Service: Backend response:', result);
+    return result;
+
   } catch (error) {
-    console.error('Error sending SMS:', error);
+    console.error('📱 SMS Service Backend Error:', error);
     throw error;
   }
-}
+};
 
-export async function testSMS({ destination, message }) {
-  if (!destination) throw new Error('Destination phone number is required');
-  if (!message) throw new Error('Message is required');
+/**
+ * Get SMS configuration status
+ * @returns {Object} Configuration status
+ */
+export const getSMSConfigStatus = () => {
+  const hasCredentials = !!(SMS_CONFIG.defaultUsername && SMS_CONFIG.defaultPassword);
+  
+  return {
+    configured: hasCredentials,
+    apiUrl: SMS_CONFIG.apiUrl,
+    source: SMS_CONFIG.defaultSource,
+    hasCredentials
+  };
+};
 
-  // Validate phone number format (basic validation)
-  const phoneRegex = /^\+?[\d\s\-\(\)]+$/;
-  if (!phoneRegex.test(destination)) {
-    throw new Error('Invalid phone number format');
-  }
-
+/**
+ * Test SMS configuration
+ * @param {Object} testData - Test SMS data
+ * @returns {Promise<Object>} Test result
+ */
+export const testSMS = async (testData) => {
   try {
-    const config = await getSMSConfig();
-    if (!config || !config.service) {
-      throw new Error('Please configure SMS service first');
+    console.log('📱 SMS Service: Testing SMS configuration');
+    
+    // Use backend test endpoint if available, otherwise direct API
+    const response = await fetch(`${API_BASE_URL}/sms/test`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('admin_auth_token')}`
+      },
+      body: JSON.stringify(testData)
+    });
+
+    if (!response.ok) {
+      // Fallback to direct API call
+      return await sendSMS(testData);
     }
 
-    // Validate configuration based on service type
-    if (config.service === 'Twilio' && (!config.account_sid || !config.auth_token || !config.from_number)) {
-      throw new Error('Twilio Account SID, Auth Token, and From Number are required');
-    }
-    
-    if (config.service === 'AfricasTalking' && (!config.api_key || !config.username)) {
-      throw new Error('Africa\'s Talking API key and username are required');
-    }
-    
-    if (config.service === 'Vonage' && (!config.api_key || !config.api_secret)) {
-      throw new Error('Vonage API key and secret are required');
-    }
-    
-    if (config.service === 'Termii' && !config.api_key) {
-      throw new Error('Termii API key is required');
-    }
-    
-    if (config.service === 'Custom' && (!config.custom_api_url || !config.api_key)) {
-      throw new Error('Custom API URL and authentication are required');
-    }
+    const result = await response.json();
+    return result;
 
-    const result = await sendSMS({ destination, message });
-    return {
-      success: true,
-      message: result.message || 'Test SMS sent successfully',
-      data: result.data
-    };
   } catch (error) {
-    console.error('Test SMS error:', error);
-    throw new Error(error.message || 'Failed to send test SMS');
+    console.error('📱 SMS Service Test Error:', error);
+    throw error;
   }
-}
+};
 
-export async function sendBulkSMS({ phones, message }) {
-  if (!phones || !phones.length) {
-    throw new Error('At least one phone number is required');
+/**
+ * Format phone number for Ghana
+ * @param {string} phone - Phone number
+ * @returns {string} Formatted phone number
+ */
+export const formatGhanaPhoneNumber = (phone) => {
+  if (!phone) return '';
+  
+  // Remove all non-digit characters
+  const cleaned = phone.replace(/\D/g, '');
+  
+  // Handle different formats
+  if (cleaned.startsWith('233')) {
+    return cleaned;
+  } else if (cleaned.startsWith('0')) {
+    return '233' + cleaned.substring(1);
+  } else if (cleaned.length === 9) {
+    return '233' + cleaned;
   }
-  if (!message) {
-    throw new Error('Message is required');
-  }
+  
+  return cleaned;
+};
 
-  try {
-    const destination = phones.join(',');
-    const result = await sendSMS({ destination, message });
-    
-    return {
-      success: true,
-      message: `Bulk SMS sent successfully to ${phones.length} recipients`,
-      data: result.data,
-      rawResponse: result.rawResponse
-    };
-  } catch (error) {
-    throw new Error(`Failed to send bulk SMS: ${error.message}`);
-  }
-}
+/**
+ * Validate phone number format
+ * @param {string} phone - Phone number
+ * @returns {boolean} Is valid
+ */
+export const validatePhoneNumber = (phone) => {
+  if (!phone) return false;
+  
+  const cleaned = phone.replace(/\D/g, '');
+  
+  // Ghana mobile numbers should be 12 digits (233 + 9 digits)
+  return cleaned.length === 12 && cleaned.startsWith('233');
+};
+
+/**
+ * Parse multiple phone numbers
+ * @param {string} phoneNumbers - Comma-separated phone numbers
+ * @returns {Array} Array of formatted phone numbers
+ */
+export const parsePhoneNumbers = (phoneNumbers) => {
+  if (!phoneNumbers) return [];
+  
+  return phoneNumbers
+    .split(',')
+    .map(phone => phone.trim())
+    .filter(phone => phone.length > 0)
+    .map(phone => formatGhanaPhoneNumber(phone));
+};

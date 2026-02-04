@@ -82,6 +82,8 @@ router.get('/', [
           WHERE p.id IN (${placeholders})
           ORDER BY p.created_at DESC, ps.size
         `;
+        
+        // Note: p.* includes all columns from products table including is_featured
 
         const result = await query(sql, productIds);
 
@@ -99,6 +101,7 @@ router.get('/', [
           product_type: row.product_type,
           image_url: row.image_url,
           is_active: row.is_active,
+          is_featured: row.is_featured || false,
           stock_quantity: row.stock_quantity,
           sku: row.sku,
           weight: row.weight ? parseFloat(row.weight) : null,

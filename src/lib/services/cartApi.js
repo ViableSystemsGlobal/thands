@@ -63,22 +63,32 @@ export const cartApi = {
 export const transformCartResponse = (apiResponse) => {
   if (Array.isArray(apiResponse)) {
     return apiResponse.map(item => {
+      // Safely parse price - ensure we get a valid number or 0
+      const parsePrice = (value) => {
+        const parsed = parseFloat(value);
+        return isNaN(parsed) ? 0 : parsed;
+      };
+      
+      // Calculate the price at top level - use adjusted price if available
+      const productPrice = parsePrice(item.adjusted_product_price) || parsePrice(item.product_price);
+      const voucherAmount = parsePrice(item.gift_voucher_amount);
+      
       const transformed = {
         ...item,
         // Add price at top level for CartItem component - use adjusted price if available
-        price: item.product_id ? parseFloat(item.adjusted_product_price || item.product_price) : parseFloat(item.gift_voucher_amount || 0),
+        price: item.product_id ? productPrice : voucherAmount,
         products: item.product_id ? {
           id: item.product_id,
           name: item.product_name,
           description: item.product_description,
           image_url: item.product_image_url,
-          price: parseFloat(item.adjusted_product_price || item.product_price || 0),
+          price: productPrice,
           category: item.product_category
         } : null,
         gift_voucher_types: item.gift_voucher_type_id ? {
           id: item.gift_voucher_type_id,
           name: item.gift_voucher_name,
-          amount: parseFloat(item.gift_voucher_amount || 0),
+          amount: voucherAmount,
           description: item.gift_voucher_description,
           image_url: item.gift_voucher_image_url
         } : null

@@ -161,27 +161,29 @@ const SMS_TEMPLATES = {
 // Get notification settings
 export async function getNotificationSettings() {
   try {
-    // For now, return default settings since we don't have notification settings in backend yet
-    // TODO: Implement notification settings endpoint in backend
-    
-    // Default settings if none exist
-    return {
-      email_enabled: true,
-      sms_enabled: true,
-      order_confirmation_email: true,
-      order_confirmation_sms: true,
-      payment_success_email: true,
-      payment_success_sms: true,
-      order_shipped_email: true,
-      order_shipped_sms: true,
-      order_delivered_email: true,
-      order_delivered_sms: false,
-      gift_voucher_email: true,
-      gift_voucher_sms: false
-    };
+    // Try to get settings from backend (may require admin token)
+    const adminToken = localStorage.getItem('admin_auth_token');
+    const headers = {};
+    if (adminToken) {
+      headers['Authorization'] = `Bearer ${adminToken}`;
+    }
+
+    const response = await fetch(`${API_BASE_URL}/notifications/settings`, {
+      headers
+    });
+
+    if (response.ok) {
+      const settings = await response.json();
+      console.log('📧 Notification settings fetched:', settings);
+      return settings;
+    } else {
+      // If unauthorized (403), use default settings
+      console.warn('⚠️ Could not fetch notification settings (may require admin access), using defaults');
+      throw new Error('Settings not accessible');
+    }
   } catch (error) {
-    console.error('Error fetching notification settings:', error);
-    // Return default settings on error
+    console.warn('⚠️ Using default notification settings:', error.message);
+    // Return default settings on error (enabled by default)
     return {
       email_enabled: true,
       sms_enabled: true,
@@ -248,7 +250,7 @@ export async function sendOrderConfirmation(orderData) {
         const notificationData = {
           customerName: `${orderData.customers.first_name} ${orderData.customers.last_name}`,
           orderNumber: orderData.order_number,
-          totalAmount: `GH₵${orderData.total_amount_ghs?.toFixed(2)}`,
+          totalAmount: `GHS ${orderData.total_amount_ghs?.toFixed(2)}`,
           trackingUrl: `${window.location.origin}/order-confirmation/${orderData.order_number}`
         };
 
@@ -320,42 +322,61 @@ export async function sendPaymentSuccess(orderData, paymentData) {
     }
 
     // Send SMS notification
-    if (settings.sms_enabled && settings.payment_success_sms && orderData.shipping_phone) {
+    const phoneNumber = orderData.shipping_phone || orderData.customer_phone || orderData.phone;
+    console.log('📱 Payment Success SMS Check:', {
+      sms_enabled: settings.sms_enabled,
+      payment_success_sms: settings.payment_success_sms,
+      phoneNumber: phoneNumber,
+      hasPhone: !!phoneNumber
+    });
+
+    if (settings.sms_enabled && settings.payment_success_sms && phoneNumber) {
       try {
         const notificationData = {
-          customerName: `${orderData.first_name || orderData.shipping_first_name} ${orderData.last_name || orderData.shipping_last_name}`,
+          customerName: `${orderData.first_name || orderData.shipping_first_name || ''} ${orderData.last_name || orderData.shipping_last_name || ''}`.trim() || 'Customer',
           orderNumber: orderData.order_number,
-          amountPaid: `GH₵${typeof orderData.total_amount_ghs === 'number' ? orderData.total_amount_ghs.toFixed(2) : parseFloat(orderData.total_amount_ghs || 0).toFixed(2)}`,
-          paymentReference: paymentData.reference || orderData.payment_reference,
+          amountPaid: `GHS ${typeof orderData.total_amount_ghs === 'number' ? orderData.total_amount_ghs.toFixed(2) : parseFloat(orderData.total_amount_ghs || 0).toFixed(2)}`,
+          paymentReference: paymentData?.reference || orderData.payment_reference || 'N/A',
           paymentMethod: 'Paystack',
           trackingUrl: `${window.location.origin}/order-status/${orderData.order_number}`
         };
 
+        console.log('📱 Sending payment success SMS to:', phoneNumber);
+        console.log('📱 SMS Message:', SMS_TEMPLATES.PAYMENT_SUCCESS(notificationData));
+
         await sendSMS({
-          destination: orderData.shipping_phone,
+          destination: phoneNumber,
           message: SMS_TEMPLATES.PAYMENT_SUCCESS(notificationData)
         });
         
+        console.log('✅ Payment success SMS sent successfully');
         results.sms = { success: true };
         await logNotification({
           type: 'payment_success',
-          recipient: orderData.shipping_phone,
+          recipient: phoneNumber,
           method: 'sms',
           status: 'sent',
           order_id: orderData.id
         });
       } catch (error) {
-        console.error('Error sending payment success SMS:', error);
+        console.error('❌ Error sending payment success SMS:', error);
         results.sms = { success: false, error: error.message };
         await logNotification({
           type: 'payment_success',
-          recipient: orderData.shipping_phone,
+          recipient: phoneNumber,
           method: 'sms',
           status: 'failed',
           error_message: error.message,
           order_id: orderData.id
         });
       }
+    } else {
+      console.warn('⚠️ SMS not sent - conditions not met:', {
+        sms_enabled: settings.sms_enabled,
+        payment_success_sms: settings.payment_success_sms,
+        hasPhone: !!phoneNumber
+      });
+      results.sms = { success: false, skipped: true, reason: 'Settings disabled or phone number missing' };
     }
 
     return results;
@@ -671,33 +692,44 @@ export async function handleOrderStatusChange(orderId, newStatus, previousStatus
   }
 }
 
+// Save notification settings
+export async function saveNotificationSettings(settings) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/notifications/settings`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('admin_auth_token')}`
+      },
+      body: JSON.stringify(settings)
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error('Error saving notification settings:', error);
+    throw error;
+  }
+}
+
 // Get notification statistics
 export async function getNotificationStats(timeframe = '30 days') {
   try {
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - (timeframe === '7 days' ? 7 : 30));
-
-    const { data, error } = await supabase
-      .from('notification_logs')
-      .select('type, method, status')
-      .gte('created_at', startDate.toISOString());
-
-    if (error) throw error;
-
-    const stats = {
-      total: data.length,
-      successful: data.filter(n => n.status === 'sent').length,
-      failed: data.filter(n => n.status === 'failed').length,
-      byType: {},
-      byMethod: {}
-    };
-
-    // Group by type and method
-    data.forEach(notification => {
-      stats.byType[notification.type] = (stats.byType[notification.type] || 0) + 1;
-      stats.byMethod[notification.method] = (stats.byMethod[notification.method] || 0) + 1;
+    const response = await fetch(`${API_BASE_URL}/notifications/stats?timeframe=${timeframe}`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('admin_auth_token')}`
+      }
     });
 
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const stats = await response.json();
     return stats;
   } catch (error) {
     console.error('Error fetching notification stats:', error);
@@ -705,6 +737,7 @@ export async function getNotificationStats(timeframe = '30 days') {
       total: 0,
       successful: 0,
       failed: 0,
+      successRate: 0,
       byType: {},
       byMethod: {}
     };

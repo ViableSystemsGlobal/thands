@@ -1,8 +1,9 @@
 import React from "react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { LayoutDashboard, ShoppingBag, Users, MessageSquare, Settings, LogOut, ShoppingCart, FileText, Truck, Gift, HelpCircle, ShieldCheck, BarChart3, Mail, Smartphone, Ticket, Bell, Database, UserPlus, Shield, Layers } from 'lucide-react';
+import { LayoutDashboard, ShoppingBag, Users, MessageSquare, Settings, LogOut, ShoppingCart, FileText, Truck, Gift, HelpCircle, ShieldCheck, BarChart3, Mail, Smartphone, Ticket, Bell, Database, UserPlus, Shield, Layers, Send } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
+import AdminBranchSelector from "./AdminBranchSelector";
 
 const AdminSidebar = ({ onLogout, onLinkClick }) => {
   const navigate = useNavigate();
@@ -21,6 +22,8 @@ const AdminSidebar = ({ onLogout, onLinkClick }) => {
     { name: "Customers", icon: Users, path: "/admin/customers" },
     { name: "Consultations", icon: FileText, path: "/admin/consultations" },
     { name: "Sales & Reports", icon: BarChart3, path: "/admin/sales" },
+    { name: "Email", icon: Send, path: "/admin/email" },
+    { name: "SMS", icon: Smartphone, path: "/admin/sms" },
     { name: "Coupons", icon: Ticket, path: "/admin/coupons" }, 
     {
       name: "Gift Vouchers",
@@ -46,8 +49,6 @@ const AdminSidebar = ({ onLogout, onLinkClick }) => {
       subItems: [
         { name: "Messages", path: "/admin/messages", icon: MessageSquare },
         { name: "Newsletter", path: "/admin/newsletter", icon: Mail },
-        { name: "Email Settings", path: "/admin/communication/email", icon: Mail },
-        { name: "SMS Settings", path: "/admin/communication/sms", icon: Smartphone },
         { name: "Notifications", path: "/admin/communication/notifications", icon: Bell },
       ],
     },
@@ -62,6 +63,11 @@ const AdminSidebar = ({ onLogout, onLinkClick }) => {
           TailoredHands
         </h1>
         <p className="text-xs text-slate-400 text-center mt-1">Admin Panel</p>
+      </div>
+
+      {/* Branch Selector */}
+      <div className="px-4 py-3 border-b border-slate-700">
+        <AdminBranchSelector className="w-full" />
       </div>
 
       <nav className="flex-grow p-4 space-y-1 overflow-y-auto">

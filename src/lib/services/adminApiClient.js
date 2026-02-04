@@ -12,19 +12,40 @@ const adminApiClient = {
   },
 
   /**
+   * Get admin branch filter from localStorage
+   */
+  getAdminBranchFilter() {
+    if (typeof window !== 'undefined') {
+      const branch = localStorage.getItem('admin_selected_branch');
+      // Return null for "ALL", otherwise return the branch code
+      return branch === 'ALL' ? null : branch;
+    }
+    return null;
+  },
+
+  /**
    * Make HTTP request with admin authentication
    */
   async makeRequest(url, options = {}) {
     const token = this.getAdminToken();
+    const branchFilter = this.getAdminBranchFilter();
+    
+    console.log('🔐 AdminApiClient: Making request to:', url);
     console.log('🔐 AdminApiClient: Token exists:', !!token);
-    console.log('🔐 AdminApiClient: Token value:', token ? `${token.substring(0, 20)}...` : 'null');
+    console.log('🔐 AdminApiClient: Branch filter:', branchFilter || 'ALL');
+    
+    if (!token) {
+      console.error('❌ AdminApiClient: No admin token found!');
+      throw new Error('Admin authentication required. Please log in again.');
+    }
     
     const config = {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
       ...options,
+    };
+
+    // Set up headers
+    config.headers = {
+      ...(options.headers || {}),
     };
 
     // Add admin auth token if available
@@ -33,6 +54,14 @@ const adminApiClient = {
       console.log('✅ AdminApiClient: Authorization header added');
     } else {
       console.log('❌ AdminApiClient: No token available');
+    }
+
+    // Add branch filter to headers if provided
+    if (branchFilter) {
+      config.headers['X-Admin-Branch-Filter'] = branchFilter;
+      console.log('✅ AdminApiClient: Branch filter header added:', branchFilter);
+    } else {
+      console.log('✅ AdminApiClient: No branch filter (viewing all branches)');
     }
 
     try {
@@ -55,7 +84,8 @@ const adminApiClient = {
       }
 
       const responseData = await response.json();
-      console.log('✅ Admin API Success:', { url, data: responseData });
+      console.log('✅ Admin API Success:', { url, status: response.status });
+      console.log('📊 Admin API Response data:', responseData);
       return { success: true, data: responseData };
 
     } catch (error) {
@@ -75,10 +105,24 @@ const adminApiClient = {
    * POST request
    */
   post: async function(url, data, options = {}) {
+    const isFormData = data instanceof FormData;
+    
+    // For FormData, don't set any headers and let the browser handle it
+    if (isFormData) {
+      return this.makeRequest(url, {
+        ...options,
+        method: 'POST',
+        body: data,
+        // Don't set Content-Type for FormData - let browser set it with boundary
+      });
+    }
+    
+    // For regular JSON data
     return this.makeRequest(url, {
       ...options,
       method: 'POST',
       body: JSON.stringify(data),
+      headers: { 'Content-Type': 'application/json' },
     });
   },
 
@@ -90,6 +134,10 @@ const adminApiClient = {
       ...options,
       method: 'PUT',
       body: JSON.stringify(data),
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
+      },
     });
   },
 
@@ -101,6 +149,10 @@ const adminApiClient = {
       ...options,
       method: 'PATCH',
       body: JSON.stringify(data),
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
+      },
     });
   },
 

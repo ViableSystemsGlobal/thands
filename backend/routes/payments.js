@@ -64,6 +64,43 @@ router.post('/webhook/paystack', async (req, res) => {
         console.error('❌ Error sending payment success notification:', notificationError);
       }
 
+      // Send admin notification for new order
+      try {
+        console.log('📧 [PAYMENT WEBHOOK] Sending admin order notification for order:', order.id);
+        console.log('📧 [PAYMENT WEBHOOK] Order details:', {
+          order_number: order.order_number,
+          order_id: order.id,
+          payment_status: order.payment_status
+        });
+        
+        // Use direct function call instead of HTTP to avoid network issues
+        const notificationsModule = require('./notifications');
+        console.log('📧 [PAYMENT WEBHOOK] Notifications module loaded:', typeof notificationsModule.sendAdminOrderNotification);
+        
+        if (typeof notificationsModule.sendAdminOrderNotification === 'function') {
+          const result = await notificationsModule.sendAdminOrderNotification(order.id);
+          console.log('✅ [PAYMENT WEBHOOK] Admin order notification result:', result);
+        } else {
+          console.error('❌ [PAYMENT WEBHOOK] sendAdminOrderNotification is not a function');
+          // Fallback to HTTP call
+          const adminNotificationResponse = await fetch(`${process.env.API_BASE_URL || 'http://localhost:3003'}/api/notifications/send/admin/order`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              orderId: order.id
+            })
+          });
+          const adminNotificationData = await adminNotificationResponse.json().catch(() => ({}));
+          console.log('✅ [PAYMENT WEBHOOK] Admin order notification (HTTP fallback):', adminNotificationData);
+        }
+      } catch (adminNotificationError) {
+        console.error('❌ [PAYMENT WEBHOOK] Error sending admin order notification:', adminNotificationError.message || adminNotificationError);
+        console.error('❌ [PAYMENT WEBHOOK] Admin notification error stack:', adminNotificationError.stack);
+        // Don't fail payment processing if admin notification fails
+      }
+
       res.json({ success: true, message: 'Payment processed successfully' });
     } else if (event === 'charge.failed') {
       console.log('❌ Payment failed for reference:', data.reference);
@@ -115,7 +152,7 @@ router.post('/confirm/:orderId', async (req, res) => {
     const order = result.rows[0];
     console.log('✅ Order payment confirmed:', order.order_number);
 
-    // Send payment success notification
+    // Send payment success notification (customer)
     try {
       const notificationResponse = await fetch(`${process.env.API_BASE_URL || 'http://localhost:3003'}/api/notifications/send/payment-success`, {
         method: 'POST',
@@ -139,6 +176,20 @@ router.post('/confirm/:orderId', async (req, res) => {
       }
     } catch (notificationError) {
       console.error('❌ Error sending payment success notification:', notificationError);
+    }
+
+    // Send admin notification for new order
+    try {
+      console.log('📧 [MANUAL PAYMENT CONFIRM] Sending admin order notification for order:', order.id);
+      const { sendAdminOrderNotification } = require('./notifications');
+      if (typeof sendAdminOrderNotification === 'function') {
+        const result = await sendAdminOrderNotification(order.id);
+        console.log('✅ [MANUAL PAYMENT CONFIRM] Admin order notification result:', result);
+      } else {
+        console.error('❌ [MANUAL PAYMENT CONFIRM] sendAdminOrderNotification is not a function');
+      }
+    } catch (adminNotificationError) {
+      console.error('❌ [MANUAL PAYMENT CONFIRM] Error sending admin order notification:', adminNotificationError.message || adminNotificationError);
     }
 
     res.json({ success: true, order: order });

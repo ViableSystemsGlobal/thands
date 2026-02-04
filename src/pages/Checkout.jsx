@@ -74,7 +74,11 @@ const CheckoutFormGrid = ({
   couponDiscount,
   couponLoading,
   onProceedToVerification,
-  validateForm
+  validateForm,
+  cart,
+  cartItems,
+  onShippingSelected,
+  selectedShipping
 }) => {
 
   const handleContinueToVerification = () => {
@@ -104,6 +108,9 @@ const CheckoutFormGrid = ({
             password={password}
             setPassword={setPassword}
             shippingRules={shippingRules}
+            cartItems={cartItems}
+            onShippingSelected={onShippingSelected}
+            selectedShipping={selectedShipping}
           />
           
           {/* Remove the Continue Button from here since it's now in OrderSummary */}
@@ -121,6 +128,7 @@ const CheckoutFormGrid = ({
             handleRemoveCoupon={handleRemoveCoupon}
             appliedCoupon={appliedCoupon}
             couponDiscount={couponDiscount}
+            selectedShipping={selectedShipping}
             couponLoading={couponLoading}
             showSubmitButton={true}
             submitButtonText="Continue to Order Verification"
@@ -165,7 +173,33 @@ const PageLoadingSpinner = () => (
 
 
 const CheckoutPage = () => {
-  const checkoutFormProps = useCheckoutForm();
+  const {
+    formData,
+    handleInputChange,
+    formErrors,
+    shippingRules,
+    previousAddresses,
+    setSelectedAddress,
+    createAccount,
+    setCreateAccount,
+    password,
+    setPassword,
+    selectedShipping,
+    handleShippingSelected,
+    handleSubmit,
+    loading: checkoutLoading,
+    shippingRule,
+    calculatedShippingCost,
+    displayCurrency,
+    couponCode,
+    setCouponCode,
+    appliedCoupon,
+    couponDiscount,
+    couponLoading,
+    handleApplyCoupon,
+    handleRemoveCoupon,
+    validateForm
+  } = useCheckoutForm();
   const { user } = useAuth();
   const { cart, loading: cartLoading } = useShop();
   const [currentStep, setCurrentStep] = useState(CHECKOUT_STEPS.SHIPPING);
@@ -183,14 +217,14 @@ const CheckoutPage = () => {
     
     try {
       // This will trigger the actual order processing and payment
-      await checkoutFormProps.handleSubmit();
+      await handleSubmit();
       console.log('✅ handleSubmit completed successfully');
     } catch (error) {
       console.error('❌ Error in handleSubmit:', error);
     }
   };
 
-  if (cartLoading || checkoutFormProps.loading) {
+  if (cartLoading || checkoutLoading) {
     return <PageLoadingSpinner />;
   }
 
@@ -214,10 +248,35 @@ const CheckoutPage = () => {
             <>
               {currentStep === CHECKOUT_STEPS.SHIPPING && (
                 <CheckoutFormGrid 
-                  {...checkoutFormProps} 
+                  formData={formData}
+                  handleInputChange={handleInputChange}
+                  formErrors={formErrors}
+                  shippingRules={shippingRules}
+                  shippingRule={shippingRule}
+                  calculatedShippingCost={calculatedShippingCost}
+                  previousAddresses={previousAddresses}
+                  setSelectedAddress={setSelectedAddress}
+                  createAccount={createAccount}
+                  setCreateAccount={setCreateAccount}
+                  password={password}
+                  setPassword={setPassword}
+                  selectedShipping={selectedShipping}
+                  handleShippingSelected={handleShippingSelected}
+                  loading={checkoutLoading}
                   user={user}
+                  displayCurrency={displayCurrency}
+                  couponCode={couponCode}
+                  setCouponCode={setCouponCode}
+                  handleApplyCoupon={handleApplyCoupon}
+                  handleRemoveCoupon={handleRemoveCoupon}
+                  appliedCoupon={appliedCoupon}
+                  couponDiscount={couponDiscount}
+                  couponLoading={couponLoading}
                   onProceedToVerification={handleProceedToVerification}
-                  validateForm={checkoutFormProps.validateForm}
+                  validateForm={validateForm}
+                  cart={cart}
+                  cartItems={cart}
+                  onShippingSelected={handleShippingSelected}
                 />
               )}
               
@@ -225,29 +284,30 @@ const CheckoutPage = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 xl:gap-12 items-start">
                   <div className="lg:col-span-3">
                     <OrderVerification
-                      formData={checkoutFormProps.formData}
-                      shippingRule={checkoutFormProps.shippingRule}
-                      calculatedShippingCost={checkoutFormProps.calculatedShippingCost}
-                      appliedCoupon={checkoutFormProps.appliedCoupon}
-                      couponDiscount={checkoutFormProps.couponDiscount}
+                      formData={formData}
+                      shippingRule={shippingRule}
+                      calculatedShippingCost={calculatedShippingCost}
+                      appliedCoupon={appliedCoupon}
+                      couponDiscount={couponDiscount}
                       onBack={handleBackToShipping}
-                      loading={checkoutFormProps.loading}
+                      loading={checkoutLoading}
                     />
                   </div>
                   
                   <div className="lg:col-span-2 lg:sticky lg:top-24">
                     <CheckoutOrderSummary
-                      shippingRule={checkoutFormProps.shippingRule}
-                      loading={checkoutFormProps.loading}
-                      calculatedShippingCost={checkoutFormProps.calculatedShippingCost}
-                      displayCurrency={checkoutFormProps.displayCurrency}
-                      couponCode={checkoutFormProps.couponCode}
-                      setCouponCode={checkoutFormProps.setCouponCode}
-                      handleApplyCoupon={checkoutFormProps.handleApplyCoupon}
-                      handleRemoveCoupon={checkoutFormProps.handleRemoveCoupon}
-                      appliedCoupon={checkoutFormProps.appliedCoupon}
-                      couponDiscount={checkoutFormProps.couponDiscount}
-                      couponLoading={checkoutFormProps.couponLoading}
+                      shippingRule={shippingRule}
+                      loading={checkoutLoading}
+                      calculatedShippingCost={calculatedShippingCost}
+                      displayCurrency={displayCurrency}
+                      couponCode={couponCode}
+                      setCouponCode={setCouponCode}
+                      handleApplyCoupon={handleApplyCoupon}
+                      handleRemoveCoupon={handleRemoveCoupon}
+                      appliedCoupon={appliedCoupon}
+                      couponDiscount={couponDiscount}
+                      selectedShipping={selectedShipping}
+                      couponLoading={couponLoading}
                       showSubmitButton={true}
                       submitButtonText="Confirm & Proceed to Payment"
                       onSubmit={handleConfirmOrder}

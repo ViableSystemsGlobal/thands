@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { api } from '@/lib/services/api';
 import { useToast } from '@/components/ui/use-toast';
 import { TOAST_MESSAGES } from '@/lib/toast-messages';
@@ -26,7 +26,7 @@ const initialSettings = {
 export const useSettings = () => {
   const { toast } = useToast();
   const [settings, setSettings] = useState(initialSettings);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Start as true since we'll fetch immediately
   const [saving, setSaving] = useState(false);
 
   const fetchSettings = useCallback(async () => {
@@ -108,6 +108,11 @@ export const useSettings = () => {
       setSaving(false);
     }
   }, [toast]);
+
+  // Automatically fetch settings on mount
+  useEffect(() => {
+    fetchSettings();
+  }, [fetchSettings]);
 
   return {
     settings,

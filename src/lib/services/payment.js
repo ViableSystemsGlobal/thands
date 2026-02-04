@@ -1,53 +1,35 @@
 import { supabase } from '@/lib/supabase';
 
-// Fetch payment settings from Supabase
+// Fetch payment settings from database via API
 export async function getPaymentConfig() {
   try {
-    console.log('🔑 Using Paystack keys from environment variables...');
+    console.log('🔑 Fetching payment configuration from database via API...');
+    console.log('🚨 DEBUG: getPaymentConfig function called!');
     
-    // SECURE: Get keys from environment variables
-    // Only public key should be used on frontend!
+    // Fetch from our backend API instead of directly from Supabase
+    const response = await fetch('http://localhost:3003/api/admin/settings');
+    if (!response.ok) {
+      throw new Error('Failed to fetch payment configuration');
+    }
+    
+    const result = await response.json();
     const data = {
-      paystack_public_key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || 'pk_test_YOUR_PUBLIC_KEY_HERE',
-      // SECRET KEY REMOVED FROM FRONTEND FOR SECURITY
-      // Secret key operations should be done on backend only
+      paystack_public_key: result.settings?.paystack_public_key,
+      paystack_secret_key: result.settings?.paystack_secret_key
     };
-    
-    if (!data.paystack_public_key || data.paystack_public_key === 'pk_test_YOUR_PUBLIC_KEY_HERE') {
-      console.warn('⚠️ Paystack public key not configured in environment variables');
-      throw new Error('Paystack public key not configured. Please set VITE_PAYSTACK_PUBLIC_KEY in .env.local');
-    }
-    
-    console.log('✅ Using secure Paystack config:', {
-      hasPublicKey: !!data?.paystack_public_key,
-      publicKeyPrefix: data?.paystack_public_key?.substring(0, 12) || 'none',
-      note: 'Secret key operations should be handled by backend'
-    });
-    
-    return data;
-    
-    // TODO: Re-enable database access once RLS policies are fixed and you want to store keys in DB
-    /*
-    console.log('🔑 Fetching payment configuration from database...');
-    const { data, error } = await supabase
-      .from('settings')
-      .select('paystack_public_key, paystack_secret_key')
-      .eq('id', 1)
-      .single();
 
-    if (error) {
-      console.error('❌ Error fetching payment config from database:', error);
-      throw error;
+    if (!data.paystack_public_key) {
+      console.warn('⚠️ Paystack public key not configured in database');
+      throw new Error('Paystack public key not configured. Please configure payment settings in admin panel.');
     }
     
-    console.log('✅ Payment config fetched:', {
+    console.log('✅ Payment config fetched from database:', {
       hasPublicKey: !!data?.paystack_public_key,
       hasSecretKey: !!data?.paystack_secret_key,
-      publicKeyPrefix: data?.paystack_public_key?.substring(0, 8) || 'none'
+      publicKeyPrefix: data?.paystack_public_key?.substring(0, 12) || 'none'
     });
     
     return data;
-    */
   } catch (error) {
     console.error('❌ Error fetching payment config:', error);
     throw error;
