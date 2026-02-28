@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Save, Loader2, AlertCircle, CheckCircle, Settings as SettingsIcon, Store, DollarSign, CreditCard, Shield, Image, Users, Database, ShieldCheck, Plus, Trash2, Upload, X, Mail, Truck, Layers } from 'lucide-react';
+import { Save, Loader2, AlertCircle, CheckCircle, Settings as SettingsIcon, Store, DollarSign, CreditCard, Shield, Image, Users, Database, ShieldCheck, Plus, Trash2, Upload, Download, X, Mail, Truck, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -100,10 +100,80 @@ const SettingsNew = () => {
   const [testingDhl, setTestingDhl] = useState(false);
   const [dhlTestResult, setDhlTestResult] = useState(null);
 
+  // Database backup/restore state
+  const [backupStatus, setBackupStatus] = useState(null); // { pgDumpAvailable, psqlAvailable }
+  const [downloadingBackup, setDownloadingBackup] = useState(false);
+  const [restoringBackup, setRestoringBackup] = useState(false);
+  const [restoreFile, setRestoreFile] = useState(null);
+
   // Debug collections state
   useEffect(() => {
     console.log('📊 Collections state changed:', collections);
   }, [collections]);
+
+  // Load backup tool status when database section is active
+  useEffect(() => {
+    if (activeSection === 'database' && !backupStatus) {
+      adminApiClient.get('/admin/backup/status')
+        .then(res => setBackupStatus(res.data))
+        .catch(() => setBackupStatus({ pgDumpAvailable: false, psqlAvailable: false }));
+    }
+  }, [activeSection, backupStatus]);
+
+  const handleDownloadBackup = async () => {
+    setDownloadingBackup(true);
+    try {
+      const token = localStorage.getItem('adminToken');
+      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3003/api';
+      const response = await fetch(`${apiBase}/admin/backup/download`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || 'Download failed');
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const match = disposition.match(/filename="([^"]+)"/);
+      const filename = match ? match[1] : 'tailoredhands-backup.sql.gz';
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: 'Backup downloaded', description: filename });
+    } catch (err) {
+      toast({ title: 'Backup failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setDownloadingBackup(false);
+    }
+  };
+
+  const handleRestoreBackup = async () => {
+    if (!restoreFile) return;
+    if (!window.confirm('⚠️ This will overwrite your current database. Are you sure?')) return;
+    setRestoringBackup(true);
+    try {
+      const token = localStorage.getItem('adminToken');
+      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3003/api';
+      const formData = new FormData();
+      formData.append('backup', restoreFile);
+      const response = await fetch(`${apiBase}/admin/backup/restore`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Restore failed');
+      toast({ title: 'Restore complete', description: 'Database restored successfully.' });
+      setRestoreFile(null);
+    } catch (err) {
+      toast({ title: 'Restore failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setRestoringBackup(false);
+    }
+  };
 
   // Load admin users when users section is active
   useEffect(() => {
@@ -1000,6 +1070,7 @@ const SettingsNew = () => {
     { id: 'shipping', label: 'Shipping', icon: Truck, color: 'text-teal-600' },
     { id: 'google', label: 'Google Services', icon: SettingsIcon, color: 'text-blue-500' },
     { id: 'users', label: 'User Management', icon: ShieldCheck, color: 'text-indigo-600' },
+    ...(user?.role === 'super_admin' ? [{ id: 'database', label: 'Database Backup', icon: Database, color: 'text-rose-600' }] : []),
   ];
 
   if (loading) {
@@ -2154,6 +2225,96 @@ const SettingsNew = () => {
               )}
 
       </div>
+
+              {/* Database Backup & Restore (super_admin only) */}
+              {activeSection === 'database' && user?.role === 'super_admin' && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center space-x-2">
+                        <Database className="h-5 w-5 text-rose-600" />
+                        <span>Database Backup &amp; Restore</span>
+                      </CardTitle>
+                      <CardDescription>
+                        Download a full pg_dump backup or restore from a previous backup file.
+                        Only super admins can access this section.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+
+                      {/* Tool availability */}
+                      {backupStatus && (
+                        <div className="flex gap-4 text-sm">
+                          <span className={backupStatus.pgDumpAvailable ? 'text-green-600' : 'text-red-600'}>
+                            {backupStatus.pgDumpAvailable ? '✓' : '✗'} pg_dump
+                          </span>
+                          <span className={backupStatus.psqlAvailable ? 'text-green-600' : 'text-red-600'}>
+                            {backupStatus.psqlAvailable ? '✓' : '✗'} psql
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Download */}
+                      <div className="rounded-lg border border-dashed border-gray-300 p-5 space-y-3">
+                        <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+                          <Download className="h-4 w-4 text-rose-500" /> Download Backup
+                        </h3>
+                        <p className="text-sm text-gray-500">
+                          Creates a compressed <code>.sql.gz</code> dump of the entire database and downloads it to your machine.
+                        </p>
+                        <Button
+                          onClick={handleDownloadBackup}
+                          disabled={downloadingBackup || (backupStatus && !backupStatus.pgDumpAvailable)}
+                          className="bg-rose-600 hover:bg-rose-700 text-white"
+                        >
+                          {downloadingBackup ? (
+                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating…</>
+                          ) : (
+                            <><Download className="mr-2 h-4 w-4" /> Download Backup</>
+                          )}
+                        </Button>
+                      </div>
+
+                      {/* Restore */}
+                      <div className="rounded-lg border border-dashed border-red-200 bg-red-50/40 p-5 space-y-3">
+                        <h3 className="font-semibold text-red-800 flex items-center gap-2">
+                          <Upload className="h-4 w-4 text-red-500" /> Restore from Backup
+                        </h3>
+                        <p className="text-sm text-red-700">
+                          <strong>Warning:</strong> This will overwrite your current database with the contents of the uploaded file. This cannot be undone.
+                        </p>
+                        <div className="space-y-2">
+                          <Input
+                            type="file"
+                            accept=".sql,.gz"
+                            onChange={(e) => setRestoreFile(e.target.files?.[0] || null)}
+                            className="bg-white"
+                          />
+                          {restoreFile && (
+                            <p className="text-xs text-gray-600">Selected: {restoreFile.name} ({(restoreFile.size / 1024 / 1024).toFixed(2)} MB)</p>
+                          )}
+                        </div>
+                        <Button
+                          onClick={handleRestoreBackup}
+                          disabled={!restoreFile || restoringBackup || (backupStatus && !backupStatus.psqlAvailable)}
+                          variant="destructive"
+                        >
+                          {restoringBackup ? (
+                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Restoring…</>
+                          ) : (
+                            'Restore Database'
+                          )}
+                        </Button>
+                      </div>
+
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
 
       {/* Save Button */}
             <div className="mt-8 flex justify-end">

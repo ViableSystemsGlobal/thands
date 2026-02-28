@@ -93,6 +93,7 @@ app.use('/api/cart', require('./routes/cart'));
 app.use('/api/product-sizes', require('./routes/productSizes'));
 // IMPORTANT: Specific routes must come before general routes
 app.use('/api/admin/users', require('./routes/adminUsers'));
+app.use('/api/admin/backup', require('./routes/backup'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/chat', require('./routes/chat'));
 app.use('/api/email', require('./routes/email'));
