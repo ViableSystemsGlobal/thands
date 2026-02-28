@@ -6,6 +6,7 @@ import { Loader2 } from "lucide-react";
 // Import Dashboard and Orders directly to avoid dynamic import issues
 import AdminDashboard from "@/pages/admin/Dashboard";
 import AdminOrders from "@/pages/admin/Orders";
+import AdminOrderDetail from "@/pages/admin/OrderDetail";
 
 const AdminLoginPage = lazy(() => import("@/pages/admin/Login"));
 const AdminProducts = lazy(() => import("@/pages/admin/Products"));
@@ -52,6 +53,7 @@ const AdminRoutes = () => {
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="products" element={<AdminProducts />} />
           <Route path="orders" element={<AdminOrders />} />
+          <Route path="orders/:id" element={<AdminOrderDetail />} />
           <Route path="consultations" element={<AdminConsultations />} />
           <Route path="sales" element={<AdminSales />} />
           <Route path="settings" element={<AdminSettings />} />

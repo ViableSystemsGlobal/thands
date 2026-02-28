@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { getOrders, updateOrderStatus } from "@/lib/services/adminApi";
-import OrderDetailsDialog from "@/components/admin/OrderDetailsDialog";
 import OrderMetrics from "@/components/admin/orders/OrderMetrics";
 import OrderTable from "@/components/admin/orders/OrderTable";
 import OrderFilters from "@/components/admin/orders/OrderFilters";
@@ -17,8 +16,6 @@ const OrdersContent = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentTab, setCurrentTab] = useState("all");
-  const [selectedOrder, setSelectedOrder] = useState(null);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [dateRange, setDateRange] = useState("month"); 
   
   const [currentPage, setCurrentPage] = useState(1);
@@ -211,11 +208,6 @@ const OrdersContent = () => {
     }
   };
 
-  const handleViewDetails = (order) => {
-    setSelectedOrder(order);
-    setIsDialogOpen(true);
-  };
-
   const handlePageChange = (page) => {
     setCurrentPage(page);
   };
@@ -259,9 +251,8 @@ const OrdersContent = () => {
           <OrderTable
             orders={orders}
             onUpdateStatus={handleUpdateOrderStatus}
-            onViewDetails={handleViewDetails}
             onDelete={handleDeleteOrder}
-            loading={loading} 
+            loading={loading}
             initialLoading={loading && orders.length === 0 && currentPage === 1}
             currentPage={currentPage}
             totalPages={totalPages}
@@ -271,12 +262,6 @@ const OrdersContent = () => {
             onItemsPerPageChange={handleItemsPerPageChange}
           />
         </div>
-
-        <OrderDetailsDialog
-          order={selectedOrder}
-          open={isDialogOpen}
-          onOpenChange={setIsDialogOpen}
-        />
       </div>
   );
 };

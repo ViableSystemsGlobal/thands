@@ -53,12 +53,12 @@ router.get('/active', async (req, res) => {
  */
 async function calculateParcelFromItems(items) {
   try {
-    // Default dimensions for clothing items
+    // Default dimensions for clothing items (weight = 1 kg in lb)
     const defaultDimensions = {
       length: 12, // inches
       width: 10,
       height: 2,
-      weight: 0.5 // pounds
+      weight: 2.205, // lb (1 kg)
     };
 
     let totalWeight = 0;
@@ -107,7 +107,7 @@ async function calculateParcelFromItems(items) {
       length: '12',
       width: '10',
       height: '2',
-      weight: '0.5',
+      weight: '2.205', // 1 kg in lb
       distance_unit: 'in',
       mass_unit: 'lb'
     };
@@ -167,11 +167,11 @@ router.post('/rates', async (req, res) => {
     let orderTotal = 0;
     if (orderId) {
       const orderResult = await query(
-        'SELECT total_amount FROM orders WHERE id = $1',
+        'SELECT base_total FROM orders WHERE id = $1',
         [orderId]
       );
       if (orderResult.rows.length > 0) {
-        orderTotal = parseFloat(orderResult.rows[0].total_amount) || 0;
+        orderTotal = parseFloat(orderResult.rows[0].base_total) || 0;
       }
     } else if (items && items.length > 0) {
       // Calculate total from items
@@ -189,6 +189,33 @@ router.post('/rates', async (req, res) => {
     let parcel;
     let dhlRates = [];
     let useManualShipping = false;
+    const isDev = process.env.NODE_ENV !== 'production';
+    const originCountry = req.branchSettings?.dhl_from_country || 'GH';
+
+    // Build calculation details for development only (no secrets)
+    const buildCalculationDetails = (source, extra = {}) => {
+      if (!isDev) return undefined;
+      const details = {
+        source,
+        destination: {
+          countryCode: normalizedAddress.country,
+          city: normalizedAddress.city,
+          state: normalizedAddress.state,
+          postalCode: normalizedAddress.zip || normalizedAddress.postalCode,
+        },
+        origin: { countryCode: originCountry },
+        parcel: parcel ? {
+          length: parcel.length,
+          width: parcel.width,
+          height: parcel.height,
+          weight: parcel.weight,
+          distance_unit: parcel.distance_unit,
+          mass_unit: parcel.mass_unit,
+        } : null,
+        ...extra,
+      };
+      return details;
+    };
 
     // Try DHL first if configured
     if (dhlService.isConfigured()) {
@@ -344,14 +371,27 @@ router.post('/rates', async (req, res) => {
           });
           
           console.log(`✅ Shipping: Found ${manualRates.length} manual shipping rates`);
-          
-          // Return manual rates (or combine with DHL rates if any)
-          return res.json({ 
-            success: true, 
+          const firstRule = rules[0];
+          const formulaSummary = firstRule
+            ? (parseFloat(firstRule.per_kg_rate) || 0) > 0
+              ? `${firstRule.per_kg_rate} GHS/kg × ${totalWeight} kg = ${manualRates[0]?.cost ?? 0} GHS`
+              : `flat rate ${firstRule.shipping_cost} GHS`
+            : 'N/A';
+
+          return res.json({
+            success: true,
             rates: manualRates,
             orderId: orderId,
             source: 'manual',
-            totalWeight: totalWeight
+            totalWeight: totalWeight,
+            ...(isDev && {
+              calculationDetails: buildCalculationDetails('manual', {
+                totalWeightKg: totalWeight,
+                orderTotal,
+                formula: formulaSummary,
+                rulesUsed: rules.length,
+              }),
+            }),
           });
         } else {
           console.log('⚠️ No manual shipping rules found');
@@ -363,17 +403,21 @@ router.post('/rates', async (req, res) => {
 
     // If we have DHL rates, return them
     if (dhlRates.length > 0) {
-      return res.json({ 
-        success: true, 
+      return res.json({
+        success: true,
         rates: dhlRates,
         orderId: orderId,
-        source: 'dhl'
+        source: 'dhl',
+        ...(isDev && {
+          calculationDetails: buildCalculationDetails('dhl', {
+            note: 'Rates from MyDHL API based on parcel and origin/destination.',
+          }),
+        }),
       });
     }
 
     // If we get here, neither DHL nor manual shipping worked
     // For domestic Ghana (GH), return a default rate so checkout can proceed
-    const originCountry = req.branchSettings?.dhl_from_country || 'GH';
     if (normalizedAddress.country === 'GH' && originCountry === 'GH') {
       console.log('📦 No DHL/manual rates for domestic GH; returning default domestic rate');
       const defaultDomesticRate = {
@@ -393,6 +437,11 @@ router.post('/rates', async (req, res) => {
         rates: [defaultDomesticRate],
         orderId: orderId,
         source: 'domestic-default',
+        ...(isDev && {
+          calculationDetails: buildCalculationDetails('domestic-default', {
+            note: 'No DHL or manual rules returned; using default domestic rate for Ghana.',
+          }),
+        }),
       });
     }
 
@@ -444,53 +493,233 @@ router.post('/label', authenticateToken, async (req, res) => {
 
     // Check if order is already shipped
     if (order.tracking_number) {
-      return res.status(400).json({ 
-        error: 'Order already has a shipping label' 
+      return res.status(400).json({
+        error: 'Order already has a shipping label'
       });
     }
 
-    // Create label via DHL
-    // Note: DHL createShipment requires full shipment data, not just rateId
-    // For now, return an error indicating this needs more implementation
-    const result = { success: false, error: 'DHL label creation requires full shipment data. Please contact support.' };
-    
+    // Ensure DHL service is initialized to access settings
+    await dhlService.initialize();
+    const settings = dhlService.settings;
+    const branchSettings = req.branchSettings || {};
+
+    const fromName    = branchSettings.dhl_from_name    || settings?.dhl_from_name    || 'TailoredHands';
+    const fromStreet  = branchSettings.dhl_from_street  || settings?.dhl_from_street  || 'Origin Address';
+    const fromCity    = branchSettings.dhl_from_city    || settings?.dhl_from_city    || 'Accra';
+    const fromState   = branchSettings.dhl_from_state   || settings?.dhl_from_state   || 'Greater Accra';
+    const fromZip     = branchSettings.dhl_from_zip     || settings?.dhl_from_zip     || '00233';
+    const fromCountry = branchSettings.dhl_from_country || settings?.dhl_from_country || 'GH';
+    const fromPhone   = branchSettings.dhl_from_phone   || settings?.dhl_from_phone   || '+233000000000';
+
+    // Calculate parcel dimensions from the order
+    const parcel = await calculateParcelDimensions(orderId);
+
+    // Convert to metric (DHL requires metric)
+    let weightKg = parseFloat(parcel.weight) || 1;
+    if (parcel.mass_unit === 'lb') weightKg *= 0.453592;
+
+    let lengthCm = parseFloat(parcel.length) || 15;
+    let widthCm  = parseFloat(parcel.width)  || 10;
+    let heightCm = parseFloat(parcel.height) || 10;
+    if (parcel.distance_unit === 'in') {
+      lengthCm *= 2.54;
+      widthCm  *= 2.54;
+      heightCm *= 2.54;
+    }
+
+    const toCountry   = normalizeCountryCode(order.shipping_country || 'GH');
+    const isDomestic  = fromCountry === toCountry;
+    const productCode = rateId?.startsWith('dhl_')
+      ? rateId.split('_')[1]   // extract code from rate id e.g. dhl_P_...
+      : (isDomestic ? 'N' : 'P');
+
+    // Declared value for customs (use order total or fallback)
+    const declaredValue = parseFloat(order.base_total || 0) || 50;
+    const declaredCurrency = 'USD';
+
+    // Get order items for export declaration line items
+    const itemsResult = await query(
+      `SELECT oi.quantity, oi.price, p.name, p.weight
+       FROM order_items oi
+       LEFT JOIN products p ON oi.product_id = p.id
+       WHERE oi.order_id = $1`,
+      [orderId]
+    );
+
+    const plannedDate = new Date();
+    plannedDate.setDate(plannedDate.getDate() + 1);
+    const plannedShippingDateAndTime = plannedDate.toISOString().replace(/\.\d{3}Z$/, ' GMT+00:00');
+    const invoiceDate = plannedDate.toISOString().split('T')[0];
+
+    // Postal codes — DHL requires postalCode on both sides; use stored value or country-appropriate fallback
+    const shipperPostal = fromZip || '00233';
+    const receiverPostal = order.shipping_postal_code || order.shipping_zip || '00000';
+
+    // Phone numbers — ensure they start with +
+    const formatPhone = (phone) => {
+      if (!phone) return '+10000000000';
+      const cleaned = phone.replace(/\s+/g, '');
+      return cleaned.startsWith('+') ? cleaned : '+' + cleaned;
+    };
+
+    // Build content block
+    const contentBlock = {
+      packages: [{
+        weight: Math.max(0.1, parseFloat(weightKg.toFixed(3))),
+        dimensions: {
+          length: Math.max(1, Math.round(lengthCm)),
+          width:  Math.max(1, Math.round(widthCm)),
+          height: Math.max(1, Math.round(heightCm)),
+        },
+      }],
+      isCustomsDeclarable: !isDomestic,
+      description: 'Clothing and apparel',
+      unitOfMeasurement: 'metric',
+    };
+
+    // Add customs fields for international shipments
+    if (!isDomestic) {
+      contentBlock.incoterm = 'DAP';
+      contentBlock.declaredValue = declaredValue;
+      contentBlock.declaredValueCurrency = declaredCurrency;
+
+      // Build export declaration line items from order items
+      const lineItems = itemsResult.rows.length > 0
+        ? itemsResult.rows.map((item, idx) => ({
+            number: idx + 1,
+            description: (item.name || 'Clothing').substring(0, 50),
+            price: parseFloat(item.price) || (declaredValue / (itemsResult.rows.length || 1)),
+            priceCurrency: declaredCurrency,
+            quantity: { value: item.quantity || 1, unitOfMeasurement: 'PCS' },
+            weight: {
+              netValue:   Math.max(0.1, parseFloat(item.weight) || 0.5),
+              grossValue: Math.max(0.1, parseFloat(item.weight) || 0.5),
+            },
+            exportReasonType: 'permanent',
+            manufacturerCountry: fromCountry,
+          }))
+        : [{
+            number: 1,
+            description: 'Clothing and apparel',
+            price: declaredValue,
+            priceCurrency: declaredCurrency,
+            quantity: { value: 1, unitOfMeasurement: 'PCS' },
+            weight: { netValue: Math.max(0.1, weightKg), grossValue: Math.max(0.1, weightKg) },
+            exportReasonType: 'permanent',
+            manufacturerCountry: fromCountry,
+          }];
+
+      contentBlock.exportDeclaration = {
+        lineItems,
+        invoice: {
+          date: invoiceDate,
+          number: order.order_number || `TH-${orderId}`,
+        },
+        exportReason: 'PERMANENT',
+        exportReasonType: 'permanent',
+      };
+    }
+
+    const shipmentBody = {
+      plannedShippingDateAndTime,
+      pickup: { isRequested: false },
+      productCode,
+      accounts: [{ number: dhlService.accountNumber, typeCode: 'shipper' }],
+      customerDetails: {
+        shipperDetails: {
+          postalAddress: {
+            postalCode:   shipperPostal,
+            cityName:     fromCity,
+            countryCode:  fromCountry,
+            addressLine1: fromStreet.substring(0, 45),
+            addressLine2: fromName.substring(0, 45),
+          },
+          contactInformation: {
+            phone:       formatPhone(fromPhone),
+            companyName: fromName,
+            fullName:    fromName,
+          },
+        },
+        receiverDetails: {
+          postalAddress: {
+            postalCode:   receiverPostal,
+            cityName:     order.shipping_city || 'City',
+            countryCode:  toCountry,
+            addressLine1: (order.shipping_address || 'Destination Address').substring(0, 45),
+            ...(order.shipping_state ? { addressLine2: order.shipping_state.substring(0, 45) } : {}),
+          },
+          contactInformation: {
+            phone:       formatPhone(order.shipping_phone),
+            companyName: `${order.shipping_first_name || ''} ${order.shipping_last_name || ''}`.trim() || 'Customer',
+            fullName:    `${order.shipping_first_name || ''} ${order.shipping_last_name || ''}`.trim() || 'Customer',
+          },
+        },
+      },
+      content: contentBlock,
+    };
+
+    console.log('📤 DHL shipment body:', JSON.stringify(shipmentBody, null, 2));
+
+    const result = await dhlService.createShipment(shipmentBody);
+
     if (!result.success) {
-      return res.status(500).json({ 
-        error: 'Failed to create shipping label', 
-        details: result.error 
+      return res.status(500).json({
+        error: 'Failed to create shipping label',
+        details: result.error
       });
     }
 
     // Update order with shipping info
     await query(
-      `UPDATE orders SET 
-        shipping_carrier = $1,
-        shipping_service = $2,
-        tracking_number = $3,
-        shipping_label_url = $4,
-        shipping_rate_id = $5,
-        status = 'shipped',
-        updated_at = NOW()
-      WHERE id = $6`,
-      [
-        result.carrier,
-        result.serviceLevel,
-        result.trackingNumber,
-        result.labelUrl,
-        rateId,
-        orderId
-      ]
+      `UPDATE orders SET
+        shipping_carrier = 'DHL',
+        shipping_service = $1,
+        tracking_number  = $2,
+        shipping_rate_id = $3,
+        status           = 'processing',
+        updated_at       = NOW()
+      WHERE id = $4`,
+      [productCode, result.trackingNumber, rateId || null, orderId]
     );
 
-    console.log(`✅ Shipping: Label created for order ${orderId}, tracking: ${result.trackingNumber}`);
-    
-    res.json({ 
-      success: true, 
+    console.log(`✅ Shipping: Waybill created for order ${orderId}, AWB: ${result.trackingNumber}`);
+
+    res.json({
+      success: true,
       label: {
         trackingNumber: result.trackingNumber,
-        labelUrl: result.labelUrl,
-        carrier: result.carrier,
-        service: result.serviceLevel
+        shipmentId:     result.shipmentId,
+        carrier:        'DHL',
+        service:        productCode,
+        labelContent:   result.labelContent,
+        labelFormat:    result.labelFormat,
+        waybillData: {
+          awbNumber: result.trackingNumber,
+          sender: {
+            name:    fromName,
+            address: fromStreet,
+            city:    fromCity,
+            state:   fromState,
+            country: fromCountry,
+            zip:     fromZip,
+          },
+          receiver: {
+            name:    `${order.shipping_first_name || ''} ${order.shipping_last_name || ''}`.trim(),
+            address: order.shipping_address,
+            city:    order.shipping_city,
+            state:   order.shipping_state,
+            country: toCountry,
+            zip:     order.shipping_postal_code,
+          },
+          package: {
+            weightKg:  parseFloat(weightKg.toFixed(2)),
+            lengthCm:  Math.round(lengthCm),
+            widthCm:   Math.round(widthCm),
+            heightCm:  Math.round(heightCm),
+          },
+          service:    productCode,
+          isDomestic,
+        },
       }
     });
   } catch (error) {
@@ -727,7 +956,7 @@ async function calculateParcelDimensions(orderId) {
       WHERE oi.order_id = $1
     `, [orderId]);
 
-    const defaultLength = 10, defaultWidth = 10, defaultHeight = 5, defaultWeight = 0.5;
+    const defaultLength = 10, defaultWidth = 10, defaultHeight = 5, defaultWeight = 2.205; // 1 kg in lb
     let totalWeight = 0;
     let maxLength = 0, maxWidth = 0;
     let totalHeight = 0;
@@ -752,7 +981,7 @@ async function calculateParcelDimensions(orderId) {
     if (maxLength === 0) maxLength = defaultLength;
     if (maxWidth === 0) maxWidth = defaultWidth;
     if (totalHeight === 0) totalHeight = defaultHeight;
-    if (totalWeight === 0) totalWeight = 1.0;
+    if (totalWeight === 0) totalWeight = defaultWeight; // 1 kg in lb
 
     return {
       length: maxLength.toString(),
@@ -769,7 +998,7 @@ async function calculateParcelDimensions(orderId) {
       width: "10",
       height: "5",
       distance_unit: "in",
-      weight: "1.0",
+      weight: "2.205", // 1 kg in lb
       mass_unit: "lb"
     };
   }
@@ -933,6 +1162,133 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error deleting shipping rule:', error);
     res.status(500).json({ error: 'Failed to delete shipping rule' });
+  }
+});
+
+/**
+ * Schedule a DHL pickup for one or more shipments
+ * POST /api/shipping/pickup
+ */
+router.post('/pickup', authenticateToken, async (req, res) => {
+  try {
+    const { trackingNumbers, pickupDate, pickupTimeFrom, pickupTimeTo, specialInstructions } = req.body;
+
+    if (!trackingNumbers || trackingNumbers.length === 0) {
+      return res.status(400).json({ error: 'At least one tracking number is required' });
+    }
+    if (!pickupDate) {
+      return res.status(400).json({ error: 'Pickup date is required' });
+    }
+
+    if (!dhlService.isConfigured()) {
+      return res.status(503).json({ error: 'DHL is not configured' });
+    }
+
+    await dhlService.initialize();
+    const settings = dhlService.settings;
+    const branchSettings = req.branchSettings || {};
+
+    const fromName    = branchSettings.dhl_from_name    || settings?.dhl_from_name    || 'TailoredHands';
+    const fromStreet  = branchSettings.dhl_from_street  || settings?.dhl_from_street  || 'Origin Address';
+    const fromCity    = branchSettings.dhl_from_city    || settings?.dhl_from_city    || 'Accra';
+    const fromState   = branchSettings.dhl_from_state   || settings?.dhl_from_state   || 'Greater Accra';
+    const fromZip     = branchSettings.dhl_from_zip     || settings?.dhl_from_zip     || '00233';
+    const fromCountry = branchSettings.dhl_from_country || settings?.dhl_from_country || 'GH';
+    const fromPhone   = branchSettings.dhl_from_phone   || settings?.dhl_from_phone   || '+233000000000';
+
+    const pickupBody = {
+      plannedPickupDateAndTime: `${pickupDate}T${pickupTimeFrom || '09:00:00'} GMT+00:00`,
+      closeTime: pickupTimeTo || '17:00',
+      location: 'reception',
+      locationType: 'business',
+      accounts: [{ number: dhlService.accountNumber, typeCode: 'shipper' }],
+      specialInstructions: [{ value: specialInstructions || 'Please ring doorbell' }],
+      remark: specialInstructions || '',
+      customerDetails: {
+        shipperDetails: {
+          postalAddress: {
+            postalCode:   fromZip || '00233',
+            cityName:     fromCity,
+            countryCode:  fromCountry,
+            addressLine1: fromStreet.substring(0, 45),
+            addressLine2: fromName.substring(0, 45),
+          },
+          contactInformation: {
+            phone:       fromPhone,
+            companyName: fromName,
+            fullName:    fromName,
+          },
+        },
+      },
+      shipmentDetails: trackingNumbers.map(tn => ({
+        shipmentTrackingNumber: tn,
+        // DHL pickup API uses 'SI' (metric: KG/CM) or 'SU' (imperial: LB/IN)
+        unitOfMeasurement: 'metric',
+        packages: [{
+          weight: 1,
+          dimensions: { length: 25, width: 20, height: 10 },
+        }],
+      })),
+    };
+
+    const result = await dhlService.schedulePickup(pickupBody);
+
+    if (!result.success) {
+      return res.status(500).json({ error: 'Failed to schedule pickup', details: result.error });
+    }
+
+    console.log(`✅ Pickup scheduled: ${result.dispatchConfirmationNumber}`);
+    res.json({
+      success: true,
+      dispatchConfirmationNumber: result.dispatchConfirmationNumber,
+      readyByTime: result.readyByTime,
+    });
+  } catch (error) {
+    console.error('❌ Schedule pickup error:', error);
+    res.status(500).json({ error: 'Failed to schedule pickup', details: error.message });
+  }
+});
+
+/**
+ * Cancel / void a DHL shipment
+ * DELETE /api/shipping/shipments/:trackingNumber
+ */
+router.delete('/shipments/:trackingNumber', authenticateToken, async (req, res) => {
+  try {
+    const { trackingNumber } = req.params;
+
+    if (!trackingNumber) {
+      return res.status(400).json({ error: 'Tracking number is required' });
+    }
+
+    if (!dhlService.isConfigured()) {
+      return res.status(503).json({ error: 'DHL is not configured' });
+    }
+
+    const result = await dhlService.cancelShipment(trackingNumber);
+
+    if (!result.success) {
+      return res.status(500).json({ error: 'Failed to cancel shipment', details: result.error });
+    }
+
+    // Clear tracking info on any matching order
+    await query(
+      `UPDATE orders SET
+        tracking_number  = NULL,
+        shipping_carrier = NULL,
+        shipping_service = NULL,
+        shipping_rate_id = NULL,
+        status           = 'processing',
+        updated_at       = NOW()
+      WHERE tracking_number = $1`,
+      [trackingNumber]
+    );
+
+    console.log(`✅ Shipment ${trackingNumber} cancelled`);
+    res.json({ success: true, message: 'Shipment cancelled successfully' });
+  } catch (error) {
+    console.error('❌ Cancel shipment error:', error);
+    res.status(500).json({ error: 'Failed to cancel shipment', details: error.message });
   }
 });
 

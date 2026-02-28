@@ -17,7 +17,9 @@ const ShippoShippingOptions = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [shippingSource, setShippingSource] = useState(null); // 'dhl' or 'manual'
+  const [calculationDetails, setCalculationDetails] = useState(null); // dev only
   const { formatPrice } = useCurrency();
+  const isDev = import.meta.env.DEV;
 
   // Check if address is international (not Ghana)
   const isInternational = address?.country && address.country !== 'Ghana' && address.country !== 'GH';
@@ -57,16 +59,19 @@ const ShippoShippingOptions = ({
       if (data.success && Array.isArray(data.rates)) {
         setShippingRates(data.rates);
         setShippingSource(data.source || 'dhl');
+        setCalculationDetails(data.calculationDetails || null);
         // Auto-select the first (usually cheapest) option when we have rates
         if (data.rates.length > 0 && !selectedShipping) {
           onShippingSelected(data.rates[0]);
         }
       } else {
+        setCalculationDetails(null);
         setError(data.error || 'No shipping options available for this address.');
       }
     } catch (err) {
       console.error('Error fetching shipping rates:', err);
       setError('Failed to load shipping options');
+      setCalculationDetails(null);
     } finally {
       setLoading(false);
     }
@@ -242,6 +247,15 @@ const ShippoShippingOptions = ({
             <p className="text-blue-600 mt-1">• Using standard shipping rates</p>
           )}
         </div>
+
+        {isDev && calculationDetails && (
+          <div className="mt-4 pt-4 border-t border-dashed border-amber-200 bg-amber-50/50 rounded-lg p-3 text-xs font-mono text-gray-700">
+            <p className="font-sans font-semibold text-amber-800 mb-2">🔧 Development: calculation details</p>
+            <pre className="whitespace-pre-wrap break-words overflow-x-auto">
+              {JSON.stringify(calculationDetails, null, 2)}
+            </pre>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

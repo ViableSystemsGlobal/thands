@@ -107,8 +107,14 @@ class DHLService {
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      const errorMsg = data.message || data.detail || data.error || response.statusText;
-      throw new Error(`DHL API error (${response.status}): ${typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg)}`);
+      console.error('❌ DHL full error response:', JSON.stringify(data, null, 2));
+      const detail = data.detail || data.message || data.error || response.statusText;
+      const extra = data.additionalDetails
+        ? ' | ' + JSON.stringify(data.additionalDetails)
+        : data.invalidFields
+        ? ' | Invalid fields: ' + JSON.stringify(data.invalidFields)
+        : '';
+      throw new Error(`DHL API error (${response.status}): ${typeof detail === 'string' ? detail : JSON.stringify(detail)}${extra}`);
     }
 
     return data;
@@ -262,11 +268,20 @@ class DHLService {
 
       console.log('✅ DHL: Shipment created');
 
+      // Extract label/waybill document (base64 PDF)
+      const labelDoc = data.documents?.find(d =>
+        ['label', 'waybill'].includes(d.typeCode?.toLowerCase())
+      ) || data.packages?.[0]?.documents?.find(d =>
+        ['label', 'waybill'].includes(d.typeCode?.toLowerCase())
+      );
+
       return {
         success: true,
         shipmentId: data.shipmentTrackingNumber,
         trackingNumber: data.shipmentTrackingNumber,
-        labelUrl: data.documents?.[0]?.url || null,
+        labelUrl: labelDoc?.url || null,
+        labelContent: labelDoc?.content || null,
+        labelFormat: labelDoc?.format || 'PDF',
         packages: data.packages || [],
         raw: data,
       };
@@ -349,6 +364,49 @@ class DHLService {
         error: error.message,
         isValid: false,
       };
+    }
+  }
+
+  /**
+   * Schedule a DHL pickup
+   * @param {Object} pickupData - Pickup request details
+   */
+  async schedulePickup(pickupData) {
+    try {
+      await this.initialize();
+      if (!this.isConfigured()) throw new Error('DHL is not configured');
+
+      console.log('📦 DHL: Scheduling pickup');
+      const data = await this.makeRequest('/pickups', 'POST', pickupData);
+
+      return {
+        success: true,
+        dispatchConfirmationNumber: data.dispatchConfirmationNumber,
+        readyByTime: data.readyByTime,
+        raw: data,
+      };
+    } catch (error) {
+      console.error('❌ DHL pickup error:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Cancel / void a shipment
+   * @param {string} shipmentTrackingNumber - DHL AWB/tracking number
+   */
+  async cancelShipment(shipmentTrackingNumber) {
+    try {
+      await this.initialize();
+      if (!this.isConfigured()) throw new Error('DHL is not configured');
+
+      console.log('📦 DHL: Cancelling shipment:', shipmentTrackingNumber);
+      await this.makeRequest(`/shipments/${shipmentTrackingNumber}`, 'DELETE');
+
+      return { success: true };
+    } catch (error) {
+      console.error('❌ DHL cancel shipment error:', error);
+      return { success: false, error: error.message };
     }
   }
 

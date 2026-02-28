@@ -1,12 +1,13 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Eye, Loader2, Trash2 } from "lucide-react";
 import { useCurrency } from "@/context/CurrencyContext";
 import PaginationControls from "@/components/admin/PaginationControls";
 
-const OrderTable = ({ 
-  orders, 
-  onUpdateStatus, 
+const OrderTable = ({
+  orders,
+  onUpdateStatus,
   onViewDetails,
   onDelete,
   loading, 
@@ -18,6 +19,7 @@ const OrderTable = ({
   totalItems,
   onItemsPerPageChange
 }) => {
+  const navigate = useNavigate();
   const { formatPrice, exchangeRate, convertToGHS } = useCurrency();
 
   const getPaymentStatusClass = (status) => {
@@ -172,11 +174,11 @@ const OrderTable = ({
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex gap-2">
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           size="sm"
                           className="flex items-center gap-1.5 text-xs border-gray-300 hover:bg-gray-100 text-gray-700"
-                          onClick={() => onViewDetails(order)}
+                          onClick={() => navigate(`/admin/orders/${order.id}`)}
                         >
                           <Eye className="w-3.5 h-3.5" />
                           Details
