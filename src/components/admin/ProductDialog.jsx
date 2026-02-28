@@ -29,6 +29,9 @@ const ProductDialog = ({ isOpen, onClose, product, onSuccess }) => {
     is_featured: false,
     image_url: "",
     weight: 0,
+    dimensions_length: "",
+    dimensions_width: "",
+    dimensions_height: "",
     stock_quantity: 0,
     sku: "",
     sizes: SIZES.map(size => ({ size, price: "" }))
@@ -65,6 +68,9 @@ const ProductDialog = ({ isOpen, onClose, product, onSuccess }) => {
         is_featured: product.is_featured || false,
         image_url: product.image_url || "",
         weight: product.weight || 0,
+        dimensions_length: product.dimensions_length || "",
+        dimensions_width: product.dimensions_width || "",
+        dimensions_height: product.dimensions_height || "",
         stock_quantity: product.stock_quantity || 0,
         sku: product.sku || "",
         sizes: SIZES.map(size => ({ size, price: "" }))
@@ -84,6 +90,9 @@ const ProductDialog = ({ isOpen, onClose, product, onSuccess }) => {
         is_featured: false,
         image_url: "",
         weight: 0,
+        dimensions_length: "",
+        dimensions_width: "",
+        dimensions_height: "",
         stock_quantity: 0,
         sku: "",
         sizes: SIZES.map(size => ({ size, price: "" }))
@@ -217,7 +226,10 @@ const ProductDialog = ({ isOpen, onClose, product, onSuccess }) => {
         is_featured: formData.is_featured,
         is_active: formData.is_active !== undefined ? formData.is_active : true,
         stock_quantity: formData.stock_quantity || 0,
-        weight: formData.weight || 0
+        weight: formData.weight || 0,
+        dimensions_length: formData.dimensions_length !== "" ? parseFloat(formData.dimensions_length) || null : null,
+        dimensions_width:  formData.dimensions_width  !== "" ? parseFloat(formData.dimensions_width)  || null : null,
+        dimensions_height: formData.dimensions_height !== "" ? parseFloat(formData.dimensions_height) || null : null,
       };
 
       // Only include SKU if it's not empty
@@ -488,6 +500,42 @@ const ProductDialog = ({ isOpen, onClose, product, onSuccess }) => {
                   className="w-full p-2 border rounded"
                   placeholder="0"
                 />
+              </div>
+            </div>
+
+            <div>
+              <label className="block mb-2 text-sm font-medium text-gray-700">Dimensions (inches) — optional, used for shipping</label>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Length</label>
+                  <input
+                    type="number" step="0.1" min="0"
+                    value={formData.dimensions_length}
+                    onChange={(e) => setFormData(prev => ({ ...prev, dimensions_length: e.target.value }))}
+                    className="w-full p-2 border rounded"
+                    placeholder="e.g. 12"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Width</label>
+                  <input
+                    type="number" step="0.1" min="0"
+                    value={formData.dimensions_width}
+                    onChange={(e) => setFormData(prev => ({ ...prev, dimensions_width: e.target.value }))}
+                    className="w-full p-2 border rounded"
+                    placeholder="e.g. 10"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Height</label>
+                  <input
+                    type="number" step="0.1" min="0"
+                    value={formData.dimensions_height}
+                    onChange={(e) => setFormData(prev => ({ ...prev, dimensions_height: e.target.value }))}
+                    className="w-full p-2 border rounded"
+                    placeholder="e.g. 2"
+                  />
+                </div>
               </div>
             </div>
 

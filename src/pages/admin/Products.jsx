@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { Plus, Pencil, Trash, Search, Package, Star, TrendingUp, Loader2, Download, Upload, Trash2, FileDown, Shirt, Ruler, Image, ImageIcon } from "lucide-react";
+import { Plus, Pencil, Trash, Search, Package, Star, TrendingUp, Loader2, Download, Upload, Trash2, FileDown, Shirt, Ruler, Image, ImageIcon, Eye } from "lucide-react";
 import { getProducts, createProduct, updateProduct, deleteProduct, getProductMetrics } from "@/lib/services/adminApi";
 import ProductDialog from "@/components/admin/ProductDialog";
 import BulkImageUploadDialog from "@/components/admin/BulkImageUploadDialog";
@@ -78,6 +79,7 @@ const ProductMetrics = ({ metrics, loading }) => (
 
 const ProductTable = ({ products, onEdit, onDeletePrompt, selectedProducts, onSelectProduct, onSelectAll, loading }) => {
   const { formatPrice } = useCurrency();
+  const navigate = useNavigate();
   
   return (
   <div className="overflow-x-auto">
@@ -129,7 +131,10 @@ const ProductTable = ({ products, onEdit, onDeletePrompt, selectedProducts, onSe
                 />
               </td>
               <td className="py-4 px-6">
-                <div className="w-16 h-16 rounded-lg overflow-hidden shadow-sm border border-gray-200">
+                <div
+                  className="w-16 h-16 rounded-lg overflow-hidden shadow-sm border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
+                  onClick={() => navigate(`/admin/products/${product.id}`)}
+                >
                   <img
                     src={getImageUrl(product.image_url) || getPlaceholderImageUrl()}
                     alt={product.name}
@@ -137,7 +142,12 @@ const ProductTable = ({ products, onEdit, onDeletePrompt, selectedProducts, onSe
                   />
                 </div>
               </td>
-              <td className="py-4 px-6 font-medium text-gray-700">{product.name}</td>
+              <td
+                className="py-4 px-6 font-medium text-gray-700 cursor-pointer hover:text-indigo-600 transition-colors"
+                onClick={() => navigate(`/admin/products/${product.id}`)}
+              >
+                {product.name}
+              </td>
               <td className="py-4 px-6 text-gray-600">{product.category}</td>
               <td className="py-4 px-6">
                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
@@ -163,11 +173,21 @@ const ProductTable = ({ products, onEdit, onDeletePrompt, selectedProducts, onSe
               </td>
               <td className="py-4 px-6">
                 <div className="flex space-x-2">
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate(`/admin/products/${product.id}`)}
+                    className="hover:bg-gray-100 hover:border-gray-400"
+                    title="View details"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
                     size="sm"
                     onClick={() => onEdit(product)}
                     className="hover:bg-indigo-50 hover:border-indigo-500 hover:text-indigo-600"
+                    title="Edit product"
                   >
                     <Pencil className="w-4 h-4" />
                   </Button>
@@ -176,6 +196,7 @@ const ProductTable = ({ products, onEdit, onDeletePrompt, selectedProducts, onSe
                     size="sm"
                     className="text-red-600 border-red-300 hover:bg-red-50 hover:border-red-500 hover:text-red-700"
                     onClick={() => onDeletePrompt(product)}
+                    title="Delete product"
                   >
                     <Trash className="w-4 h-4" />
                   </Button>

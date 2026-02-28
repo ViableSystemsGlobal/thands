@@ -7,6 +7,7 @@ import { Loader2 } from "lucide-react";
 import AdminDashboard from "@/pages/admin/Dashboard";
 import AdminOrders from "@/pages/admin/Orders";
 import AdminOrderDetail from "@/pages/admin/OrderDetail";
+import AdminProductDetail from "@/pages/admin/ProductDetail";
 
 const AdminLoginPage = lazy(() => import("@/pages/admin/Login"));
 const AdminProducts = lazy(() => import("@/pages/admin/Products"));
@@ -52,6 +53,7 @@ const AdminRoutes = () => {
         <Route element={<AdminLayout />}>
           <Route path="dashboard" element={<AdminDashboard />} />
           <Route path="products" element={<AdminProducts />} />
+          <Route path="products/:id" element={<AdminProductDetail />} />
           <Route path="orders" element={<AdminOrders />} />
           <Route path="orders/:id" element={<AdminOrderDetail />} />
           <Route path="consultations" element={<AdminConsultations />} />
