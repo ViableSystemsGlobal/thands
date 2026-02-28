@@ -105,30 +105,41 @@ const sendSMSViaDeywuro = async (smsData) => {
   }
 };
 
-// Test SMS endpoint (no auth required for testing)
-router.post('/test', async (req, res) => {
+// Test SMS endpoint (admin only)
+router.post('/test', authenticateToken, async (req, res) => {
   try {
     console.log('📱 SMS Test: Testing SMS configuration');
-    
-    const { destination, message = 'Test SMS from TailoredH' } = req.body;
-    
+
+    const adminRoles = ['super_admin', 'admin'];
+    if (!adminRoles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { destination, message = 'Test SMS from TailoredHands' } = req.body;
+
     if (!destination) {
-      return res.status(400).json({ 
-        error: 'Destination phone number is required' 
+      return res.status(400).json({
+        error: 'Destination phone number is required'
       });
     }
 
-    // Use default credentials for testing
+    // Use DB credentials for testing
+    const settingsResult = await query('SELECT * FROM sms_settings WHERE id = 1');
+    if (settingsResult.rows.length === 0 || !settingsResult.rows[0].deywuro_username) {
+      return res.status(400).json({ error: 'SMS settings not configured' });
+    }
+    const settings = settingsResult.rows[0];
+
     const testSmsData = {
       destination,
       message,
-      source: DEYWURO_CONFIG.defaultSource,
-      username: DEYWURO_CONFIG.defaultUsername,
-      password: DEYWURO_CONFIG.defaultPassword
+      source: settings.deywuro_source || DEYWURO_CONFIG.defaultSource,
+      username: settings.deywuro_username,
+      password: settings.deywuro_password
     };
 
     const result = await sendSMSViaDeywuro(testSmsData);
-    
+
     res.json({
       success: true,
       message: 'Test SMS sent successfully',
@@ -137,9 +148,9 @@ router.post('/test', async (req, res) => {
 
   } catch (error) {
     console.error('📱 SMS Test Error:', error);
-    res.status(500).json({ 
-      error: 'Failed to send test SMS', 
-      details: error.message 
+    res.status(500).json({
+      error: 'Failed to send test SMS',
+      details: error.message
     });
   }
 });
@@ -274,12 +285,19 @@ router.post('/bulk', authenticateToken, async (req, res) => {
     // Format recipients as comma-separated string
     const destination = recipients.join(',');
     
+    // Get SMS settings from database
+    const settingsResult = await query('SELECT * FROM sms_settings WHERE id = 1');
+    if (settingsResult.rows.length === 0 || !settingsResult.rows[0].deywuro_username) {
+      return res.status(400).json({ error: 'SMS settings not configured. Please configure SMS settings first.' });
+    }
+    const smsSettings = settingsResult.rows[0];
+
     const smsData = {
       destination,
       message,
-      source: source || DEYWURO_CONFIG.defaultSource,
-      username: DEYWURO_CONFIG.defaultUsername,
-      password: DEYWURO_CONFIG.defaultPassword
+      source: source || smsSettings.deywuro_source || DEYWURO_CONFIG.defaultSource,
+      username: smsSettings.deywuro_username,
+      password: smsSettings.deywuro_password
     };
 
     console.log('📱 SMS Bulk: Sending bulk SMS...', {
@@ -310,13 +328,15 @@ router.post('/bulk', authenticateToken, async (req, res) => {
   }
 });
 
-// Save SMS settings to database
-router.post('/settings', async (req, res) => {
+// Save SMS settings to database (super_admin / admin only)
+router.post('/settings', authenticateToken, async (req, res) => {
   try {
     console.log('📱 SMS Settings: Saving settings');
 
-    // Temporarily bypass authentication for testing
-    // TODO: Re-enable authentication in production
+    const adminRoles = ['super_admin', 'admin'];
+    if (!adminRoles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
 
     const { deywuro_username, deywuro_password, deywuro_source } = req.body;
 
@@ -361,23 +381,27 @@ router.post('/settings', async (req, res) => {
   }
 });
 
-// Get SMS settings from database
-router.get('/settings', async (req, res) => {
+// Get SMS settings from database (super_admin / admin only)
+// Password is masked in the response — never returned in plaintext
+router.get('/settings', authenticateToken, async (req, res) => {
   try {
     console.log('📱 SMS Settings: Getting settings');
 
-    // Temporarily bypass authentication for testing
-    // TODO: Re-enable authentication in production
+    const adminRoles = ['super_admin', 'admin'];
+    if (!adminRoles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
 
     const result = await query('SELECT * FROM sms_settings WHERE id = 1');
-    
+
     if (result.rows.length === 0) {
       return res.json({
         success: true,
         data: {
           deywuro_username: '',
           deywuro_password: '',
-          deywuro_source: 'T-Hands'
+          deywuro_source: 'T-Hands',
+          has_password: false
         }
       });
     }
@@ -387,8 +411,10 @@ router.get('/settings', async (req, res) => {
       success: true,
       data: {
         deywuro_username: settings.deywuro_username,
-        deywuro_password: settings.deywuro_password,
-        deywuro_source: settings.deywuro_source
+        // Never return the actual password — client shows a masked placeholder
+        deywuro_password: settings.deywuro_password ? '••••••••' : '',
+        deywuro_source: settings.deywuro_source,
+        has_password: !!settings.deywuro_password
       }
     });
 
