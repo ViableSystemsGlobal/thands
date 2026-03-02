@@ -539,7 +539,7 @@ router.post('/label', authenticateToken, async (req, res) => {
 
     // Get order items for export declaration line items
     const itemsResult = await query(
-      `SELECT oi.quantity, oi.price, p.name, p.weight
+      `SELECT oi.quantity, oi.price, p.name, p.weight, p.hs_code
        FROM order_items oi
        LEFT JOIN products p ON oi.product_id = p.id
        WHERE oi.order_id = $1`,
@@ -595,6 +595,7 @@ router.post('/label', authenticateToken, async (req, res) => {
               netValue:   Math.max(0.1, parseFloat(item.weight) || 0.5),
               grossValue: Math.max(0.1, parseFloat(item.weight) || 0.5),
             },
+            commodityCode: item.hs_code || '621132',
             exportReasonType: 'permanent',
             manufacturerCountry: fromCountry,
           }))
@@ -605,6 +606,7 @@ router.post('/label', authenticateToken, async (req, res) => {
             priceCurrency: declaredCurrency,
             quantity: { value: 1, unitOfMeasurement: 'PCS' },
             weight: { netValue: Math.max(0.1, weightKg), grossValue: Math.max(0.1, weightKg) },
+            commodityCode: '621132',
             exportReasonType: 'permanent',
             manufacturerCountry: fromCountry,
           }];
@@ -1173,7 +1175,7 @@ router.post('/pickup', authenticateToken, async (req, res) => {
   try {
     const { trackingNumbers, pickupDate, pickupTimeFrom, pickupTimeTo, specialInstructions } = req.body;
 
-    if (!trackingNumbers || trackingNumbers.length === 0) {
+    if (!Array.isArray(trackingNumbers) || trackingNumbers.length === 0) {
       return res.status(400).json({ error: 'At least one tracking number is required' });
     }
     if (!pickupDate) {
@@ -1196,14 +1198,76 @@ router.post('/pickup', authenticateToken, async (req, res) => {
     const fromCountry = branchSettings.dhl_from_country || settings?.dhl_from_country || 'GH';
     const fromPhone   = branchSettings.dhl_from_phone   || settings?.dhl_from_phone   || '+233000000000';
 
+    // Look up order data for each tracking number
+    const orderDataMap = {};
+    for (const tn of trackingNumbers) {
+      const orderRes = await query(
+        'SELECT id, base_total, shipping_country FROM orders WHERE tracking_number = $1',
+        [tn]
+      );
+      orderDataMap[tn] = orderRes.rows[0] || null;
+    }
+
+    // Build per-shipment details with actual parcel dimensions
+    const shipmentDetails = [];
+    for (const tn of trackingNumbers) {
+      const orderData = orderDataMap[tn];
+      const toCountry = normalizeCountryCode(orderData?.shipping_country || 'GH');
+      const isDomestic = fromCountry === toCountry;
+      const declaredValue = parseFloat(orderData?.base_total || 0) || 50;
+
+      // Calculate actual parcel dimensions from order items
+      let weightKg = 1;
+      let lengthCm = 25, widthCm = 20, heightCm = 10;
+      if (orderData?.id) {
+        const parcel = await calculateParcelDimensions(orderData.id);
+        weightKg = parseFloat(parcel.weight) || 1;
+        if (parcel.mass_unit === 'lb') weightKg *= 0.453592;
+        lengthCm = parseFloat(parcel.length) || 25;
+        widthCm  = parseFloat(parcel.width)  || 20;
+        heightCm = parseFloat(parcel.height) || 10;
+        if (parcel.distance_unit === 'in') {
+          lengthCm *= 2.54;
+          widthCm  *= 2.54;
+          heightCm *= 2.54;
+        }
+      }
+
+      const detail = {
+        shipmentTrackingNumber: tn,
+        productCode: isDomestic ? 'N' : 'P',
+        isCustomsDeclarable: !isDomestic,
+        unitOfMeasurement: 'metric',
+        packages: [{
+          weight: Math.round(weightKg * 100) / 100,
+          dimensions: {
+            length: Math.ceil(lengthCm),
+            width:  Math.ceil(widthCm),
+            height: Math.ceil(heightCm),
+          },
+        }],
+      };
+      if (!isDomestic) {
+        detail.declaredValue = declaredValue;
+        detail.declaredValueCurrency = 'USD';
+      }
+      shipmentDetails.push(detail);
+    }
+
+    // Ensure time values include seconds for DHL format (HH:mm:ss)
+    const readyTime = (pickupTimeFrom || '09:00').replace(/^(\d{2}:\d{2})$/, '$1:00');
+    const closeTime = (pickupTimeTo   || '17:00').replace(/^(\d{2}:\d{2})$/, '$1:00');
+
     const pickupBody = {
-      plannedPickupDateAndTime: `${pickupDate}T${pickupTimeFrom || '09:00:00'} GMT+00:00`,
-      closeTime: pickupTimeTo || '17:00',
+      plannedPickupDateAndTime: `${pickupDate}T${readyTime} GMT+00:00`,
+      closeTime,
       location: 'reception',
       locationType: 'business',
       accounts: [{ number: dhlService.accountNumber, typeCode: 'shipper' }],
-      specialInstructions: [{ value: specialInstructions || 'Please ring doorbell' }],
-      remark: specialInstructions || '',
+      ...(specialInstructions && {
+        specialInstructions: [{ value: specialInstructions, typeCode: 'TBD' }],
+        remark: specialInstructions,
+      }),
       customerDetails: {
         shipperDetails: {
           postalAddress: {
@@ -1220,21 +1284,23 @@ router.post('/pickup', authenticateToken, async (req, res) => {
           },
         },
       },
-      shipmentDetails: trackingNumbers.map(tn => ({
-        shipmentTrackingNumber: tn,
-        // DHL pickup API uses 'SI' (metric: KG/CM) or 'SU' (imperial: LB/IN)
-        unitOfMeasurement: 'metric',
-        packages: [{
-          weight: 1,
-          dimensions: { length: 25, width: 20, height: 10 },
-        }],
-      })),
+      shipmentDetails,
     };
 
     const result = await dhlService.schedulePickup(pickupBody);
 
     if (!result.success) {
       return res.status(500).json({ error: 'Failed to schedule pickup', details: result.error });
+    }
+
+    // Persist confirmation number against all involved orders
+    if (result.dispatchConfirmationNumber) {
+      for (const tn of trackingNumbers) {
+        await query(
+          'UPDATE orders SET pickup_confirmation_number = $1, updated_at = NOW() WHERE tracking_number = $2',
+          [result.dispatchConfirmationNumber, tn]
+        );
+      }
     }
 
     console.log(`✅ Pickup scheduled: ${result.dispatchConfirmationNumber}`);

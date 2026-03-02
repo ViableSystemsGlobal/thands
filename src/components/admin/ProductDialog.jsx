@@ -34,6 +34,7 @@ const ProductDialog = ({ isOpen, onClose, product, onSuccess }) => {
     dimensions_height: "",
     stock_quantity: 0,
     sku: "",
+    hs_code: "621132",
     sizes: SIZES.map(size => ({ size, price: "" }))
   });
 
@@ -73,6 +74,7 @@ const ProductDialog = ({ isOpen, onClose, product, onSuccess }) => {
         dimensions_height: product.dimensions_height || "",
         stock_quantity: product.stock_quantity || 0,
         sku: product.sku || "",
+        hs_code: product.hs_code || "621132",
         sizes: SIZES.map(size => ({ size, price: "" }))
       });
 
@@ -95,6 +97,7 @@ const ProductDialog = ({ isOpen, onClose, product, onSuccess }) => {
         dimensions_height: "",
         stock_quantity: 0,
         sku: "",
+        hs_code: "621132",
         sizes: SIZES.map(size => ({ size, price: "" }))
       });
     }
@@ -230,6 +233,7 @@ const ProductDialog = ({ isOpen, onClose, product, onSuccess }) => {
         dimensions_length: formData.dimensions_length !== "" ? parseFloat(formData.dimensions_length) || null : null,
         dimensions_width:  formData.dimensions_width  !== "" ? parseFloat(formData.dimensions_width)  || null : null,
         dimensions_height: formData.dimensions_height !== "" ? parseFloat(formData.dimensions_height) || null : null,
+        hs_code: formData.hs_code || '621132',
       };
 
       // Only include SKU if it's not empty
@@ -548,6 +552,20 @@ const ProductDialog = ({ isOpen, onClose, product, onSuccess }) => {
                 className="w-full p-2 border rounded"
                 placeholder="Product SKU"
               />
+            </div>
+
+            <div>
+              <label className="block mb-2">HS Code <span className="text-xs text-gray-500">(Customs commodity code for international shipping)</span></label>
+              <input
+                type="text"
+                value={formData.hs_code || ""}
+                onChange={(e) => setFormData(prev => ({ ...prev, hs_code: e.target.value }))}
+                className="w-full p-2 border rounded font-mono"
+                placeholder="621132"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Default 621132 (men's other garments — cotton). Use 620319 for suits.
+              </p>
             </div>
 
             <div>

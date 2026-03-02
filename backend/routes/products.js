@@ -315,6 +315,7 @@ router.post('/', authenticateToken,
       dimensions_height,
       product_type = 'made_to_measure',
       is_featured = false,
+      hs_code = '621132',
       sizes = []
     } = req.body;
 
@@ -329,10 +330,10 @@ router.post('/', authenticateToken,
 
     // Create product - price field stores USD, price_usd is redundant but kept for compatibility
     const productResult = await query(
-      `INSERT INTO products (name, description, category, price, price_usd, image_url, stock_quantity, sku, weight, dimensions_length, dimensions_width, dimensions_height, product_type, is_featured)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      `INSERT INTO products (name, description, category, price, price_usd, image_url, stock_quantity, sku, weight, dimensions_length, dimensions_width, dimensions_height, product_type, is_featured, hs_code)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING *`,
-      [name, description, category, price, price || price_usd, image_url, stock_quantity, sku, weight, dimensions_length, dimensions_width, dimensions_height, product_type, is_featured]
+      [name, description, category, price, price || price_usd, image_url, stock_quantity, sku, weight, dimensions_length, dimensions_width, dimensions_height, product_type, is_featured, hs_code]
     );
 
     const product = productResult.rows[0];
