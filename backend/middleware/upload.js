@@ -1,215 +1,145 @@
 const multer = require('multer');
 const sharp = require('sharp');
-const path = require('path');
-const fs = require('fs').promises;
 const { v4: uuidv4 } = require('uuid');
+const { createClient } = require('@supabase/supabase-js');
 
-// Get the project root directory (two levels up from backend/middleware)
-const projectRoot = path.resolve(__dirname, '..', '..');
+const BUCKET = 'uploads';
 
-// Ensure upload directories exist
-const ensureUploadDirs = async () => {
-  const dirs = [
-    'uploads',
-    'uploads/products',
-    'uploads/products/original',
-    'uploads/products/thumbnails',
-    'uploads/products/medium',
-    'uploads/newsletter',
-    'uploads/newsletter/original',
-    'uploads/newsletter/thumbnails',
-    'uploads/newsletter/medium',
-    'uploads/hero',
-    'uploads/hero/original',
-    'uploads/hero/thumbnails',
-    'uploads/hero/medium',
-    'uploads/collection',
-    'uploads/collection/original',
-    'uploads/collection/thumbnails',
-    'uploads/collection/medium',
-    'uploads/temp'
-  ];
-
-  for (const dir of dirs) {
-    try {
-      // Use absolute path from project root
-      const fullPath = path.join(projectRoot, dir);
-      await fs.mkdir(fullPath, { recursive: true });
-      console.log(`✅ Created/verified directory: ${fullPath}`);
-    } catch (error) {
-      // Directory already exists, ignore
-      if (error.code !== 'EEXIST') {
-        console.error(`Error creating directory ${dir}:`, error);
-      }
-    }
+// Lazy-init Supabase client so missing env vars don't crash on startup
+let supabase = null;
+const getSupabase = () => {
+  if (!supabase) {
+    const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+    const key = process.env.VITE_SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_KEY;
+    if (!url || !key) throw new Error('Supabase credentials not configured for image storage');
+    supabase = createClient(url, key);
   }
+  return supabase;
 };
 
-// Initialize directories
-ensureUploadDirs();
-
-// Configure multer for memory storage (we'll process with Sharp)
-const storage = multer.memoryStorage();
-
-// File filter for images only
-const fileFilter = (req, file, cb) => {
-  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-  
-  if (allowedTypes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error('Only JPEG, PNG, and WebP images are allowed'), false);
-  }
-};
-
-// Multer configuration
+// Configure multer — memory storage so Sharp can process in-memory
 const upload = multer({
-  storage: storage,
-  limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
-    files: 5 // Maximum 5 files per request
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 5 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    allowed.includes(file.mimetype)
+      ? cb(null, true)
+      : cb(new Error('Only JPEG, PNG, and WebP images are allowed'), false);
   },
-  fileFilter: fileFilter
 });
 
-// Image processing function
+/**
+ * Process an image with Sharp and upload all three size variants to Supabase Storage.
+ * Returns the same shape as before so routes/upload.js needs minimal changes.
+ */
 const processImage = async (buffer, filename, type = 'product') => {
-  const baseFilename = path.parse(filename).name;
+  if (!buffer || buffer.length === 0) throw new Error('Invalid image buffer');
+
   const fileId = uuidv4();
-  
+  const sb = getSupabase();
+
+  const metadata = await sharp(buffer).metadata();
+  console.log(`📸 Processing image: ${filename} (${metadata.width}x${metadata.height})`);
+
+  const sizes = {
+    thumbnails: { width: 500,  height: 600,  suffix: 'thumb'    },
+    medium:     { width: 800,  height: 1000, suffix: 'medium'   },
+    original:   { width: null, height: null,  suffix: 'original' },
+  };
+
   const processedImages = {};
 
-  try {
-    console.log(`Processing image: ${filename}, buffer size: ${buffer.length}`);
-    
-    // Validate buffer
-    if (!buffer || buffer.length === 0) {
-      throw new Error('Invalid image buffer');
+  for (const [sizeName, config] of Object.entries(sizes)) {
+    let sharpInstance = sharp(buffer);
+    if (config.width && config.height) {
+      sharpInstance = sharpInstance.resize(config.width, config.height, {
+        fit: 'inside',
+        withoutEnlargement: true,
+      });
     }
 
-    // Test if Sharp can read the buffer
-    const metadata = await sharp(buffer).metadata();
-    console.log('Image metadata:', metadata);
+    const imageBuffer = await sharpInstance
+      .webp({ quality: 95, effort: 6 })
+      .toBuffer();
 
-    // Create different sizes for different use cases
-    const sizes = {
-      thumbnails: { width: 500, height: 600, suffix: 'thumb' },
-      medium: { width: 800, height: 1000, suffix: 'medium' },
-      original: { width: null, height: null, suffix: 'original' }
+    const storagePath = `${type}/${sizeName}/${fileId}-${config.suffix}.webp`;
+
+    const { error } = await sb.storage
+      .from(BUCKET)
+      .upload(storagePath, imageBuffer, { contentType: 'image/webp', upsert: false });
+
+    if (error) throw new Error(`Supabase upload failed (${sizeName}): ${error.message}`);
+
+    const { data: { publicUrl } } = sb.storage.from(BUCKET).getPublicUrl(storagePath);
+
+    processedImages[sizeName] = {
+      url: publicUrl,
+      size: sizeName,
+      width: config.width,
+      height: config.height,
     };
-
-    for (const [sizeName, config] of Object.entries(sizes)) {
-      // Use absolute path from project root
-      const outputDir = path.join(projectRoot, 'uploads', type, sizeName);
-      const outputPath = path.join(outputDir, `${fileId}-${config.suffix}.webp`);
-      
-      // Ensure the directory exists before writing
-      await fs.mkdir(outputDir, { recursive: true });
-      
-      console.log(`Processing ${sizeName} to ${outputPath}`);
-      
-      let sharpInstance = sharp(buffer);
-      
-      // Resize if dimensions are specified
-      if (config.width && config.height) {
-        sharpInstance = sharpInstance.resize(config.width, config.height, {
-          fit: 'inside',
-          withoutEnlargement: true
-        });
-      }
-      
-      // Convert to WebP format for better compression
-      await sharpInstance
-        .webp({ quality: 95, effort: 6 })
-        .toFile(outputPath);
-      
-      console.log(`Successfully processed ${sizeName}`);
-      
-      // URL is relative to the web root, not the file system
-      processedImages[sizeName] = {
-        path: outputPath,
-        url: `/uploads/${type}/${sizeName}/${fileId}-${config.suffix}.webp`,
-        size: sizeName,
-        width: config.width,
-        height: config.height
-      };
-    }
-
-    return {
-      id: fileId,
-      originalName: filename,
-      processedImages,
-      uploadedAt: new Date().toISOString()
-    };
-
-  } catch (error) {
-    console.error('Image processing error:', error);
-    console.error('Error details:', {
-      message: error.message,
-      stack: error.stack,
-      filename,
-      bufferLength: buffer ? buffer.length : 'no buffer'
-    });
-    throw new Error(`Failed to process image: ${error.message}`);
   }
+
+  return {
+    id: fileId,
+    originalName: filename,
+    processedImages,
+    uploadedAt: new Date().toISOString(),
+  };
 };
 
-// Clean up temporary files
-const cleanupTempFiles = async (files) => {
-  try {
-    for (const file of files) {
-      if (file.path && file.path.includes('temp')) {
-        await fs.unlink(file.path).catch(() => {});
-      }
-    }
-  } catch (error) {
-    console.error('Cleanup error:', error);
-  }
+/**
+ * Extract the UUID fileId from any image URL (local path or Supabase URL).
+ * Filename format: <uuid>-<suffix>.webp  — UUID is always the first 5 hyphen-groups.
+ */
+const extractFileId = (url) => {
+  const filename = url.split('/').pop();          // e.g. "abc123-...-original.webp"
+  return filename.split('-').slice(0, 5).join('-'); // rejoin UUID parts
 };
 
-// Delete uploaded file
-const deleteUploadedFile = async (fileId) => {
+/**
+ * Delete all three size variants of a file from Supabase Storage.
+ * Accepts either a raw fileId (UUID) or a full URL.
+ */
+const deleteUploadedFile = async (fileIdOrUrl, type = 'product') => {
   try {
-    const sizes = ['original', 'medium', 'thumbnail'];
-    
-    for (const size of sizes) {
-      const filePath = path.join('uploads', 'products', size, `${fileId}-${size === 'original' ? 'original' : size}.webp`);
-      await fs.unlink(filePath).catch(() => {});
-    }
-    
-    return true;
+    const sb = getSupabase();
+    const fileId = fileIdOrUrl.startsWith('http') ? extractFileId(fileIdOrUrl) : fileIdOrUrl;
+
+    const paths = [
+      `${type}/thumbnails/${fileId}-thumb.webp`,
+      `${type}/medium/${fileId}-medium.webp`,
+      `${type}/original/${fileId}-original.webp`,
+    ];
+
+    const { error } = await sb.storage.from(BUCKET).remove(paths);
+    if (error) console.error('⚠️  Supabase delete error:', error.message);
+    return !error;
   } catch (error) {
     console.error('Delete file error:', error);
     return false;
   }
 };
 
-// Get file info
-const getFileInfo = async (fileId) => {
+/**
+ * Check whether a file exists in Supabase Storage.
+ */
+const getFileInfo = async (fileIdOrUrl, type = 'product') => {
   try {
-    const originalPath = path.join('uploads', 'products', 'original', `${fileId}-original.webp`);
-    const stats = await fs.stat(originalPath);
-    
-    return {
-      id: fileId,
-      exists: true,
-      size: stats.size,
-      createdAt: stats.birthtime,
-      modifiedAt: stats.mtime
-    };
-  } catch (error) {
-    return {
-      id: fileId,
-      exists: false
-    };
+    const sb = getSupabase();
+    const fileId = fileIdOrUrl.startsWith('http') ? extractFileId(fileIdOrUrl) : fileIdOrUrl;
+    const folder = `${type}/original`;
+
+    const { data } = await sb.storage.from(BUCKET).list(folder, {
+      search: `${fileId}-original.webp`,
+    });
+
+    const exists = !!(data && data.length > 0);
+    return { id: fileId, exists };
+  } catch {
+    return { id: fileIdOrUrl, exists: false };
   }
 };
 
-module.exports = {
-  upload,
-  processImage,
-  cleanupTempFiles,
-  deleteUploadedFile,
-  getFileInfo,
-  ensureUploadDirs
-};
+module.exports = { upload, processImage, deleteUploadedFile, getFileInfo, extractFileId };
