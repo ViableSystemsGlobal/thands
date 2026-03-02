@@ -1,6 +1,6 @@
 const express = require('express');
 const { authenticateToken, requireRole } = require('../middleware/auth');
-const { upload, processImage, deleteUploadedFile, getFileInfo, extractFileId } = require('../middleware/upload');
+const { upload, processImage, deleteUploadedFile, getFileInfo } = require('../middleware/upload');
 const { query } = require('../config/database');
 
 const router = express.Router();
@@ -148,16 +148,16 @@ router.put('/product/:productId', authenticateToken, upload.single('image'), asy
       'product'
     );
 
-    // Update product with new Supabase image URL
-    const newImageUrl = processedImage.processedImages.original.url;
-    await query('UPDATE products SET image_url = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+    // Update product with new image URL
+    const newImageUrl = `/uploads/products/original/${processedImage.id}-original.webp`;
+    await query('UPDATE products SET image_url = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2', 
       [newImageUrl, productId]);
 
-    // Delete old image from Supabase Storage
-    if (oldImageUrl) {
+    // Delete old image if it exists and is not a Supabase URL
+    if (oldImageUrl && !oldImageUrl.includes('supabase.co')) {
       try {
-        const oldFileId = extractFileId(oldImageUrl);
-        await deleteUploadedFile(oldFileId, 'product');
+        const oldFileId = oldImageUrl.split('/').pop().split('-')[0];
+        await deleteUploadedFile(oldFileId);
       } catch (error) {
         console.error('Error deleting old image:', error);
       }
@@ -251,10 +251,11 @@ router.post('/hero', authenticateToken, upload.single('image'), async (req, res)
       'hero'
     );
 
+    const baseUrl = `http://localhost:${process.env.PORT || 3003}`;
     res.json({
       success: true,
-      url: processedImage.processedImages.original.url,
-      imageUrl: processedImage.processedImages.original.url,
+      url: `${baseUrl}${processedImage.processedImages.thumbnails.url}`,
+      imageUrl: `${baseUrl}${processedImage.processedImages.thumbnails.url}`,
       message: 'Hero image uploaded successfully'
     });
 
@@ -280,10 +281,12 @@ router.post('/collection', authenticateToken, upload.single('image'), async (req
       'collection'
     );
 
+    console.log('Collection upload - processedImage:', JSON.stringify(processedImage, null, 2));
+    const baseUrl = `http://localhost:${process.env.PORT || 3003}`;
     res.json({
       success: true,
-      url: processedImage.processedImages.original.url,
-      imageUrl: processedImage.processedImages.original.url,
+      url: `${baseUrl}${processedImage.processedImages.thumbnails.url}`,
+      imageUrl: `${baseUrl}${processedImage.processedImages.thumbnails.url}`,
       message: 'Collection image uploaded successfully'
     });
 
@@ -309,10 +312,12 @@ router.post('/newsletter', authenticateToken, upload.single('image'), async (req
       'newsletter'
     );
 
+    console.log('Newsletter upload - processedImage:', JSON.stringify(processedImage, null, 2));
+    const baseUrl = `http://localhost:${process.env.PORT || 3003}`;
     res.json({
       success: true,
-      url: processedImage.processedImages.original.url,
-      imageUrl: processedImage.processedImages.original.url,
+      url: `${baseUrl}${processedImage.processedImages.thumbnails.url}`,
+      imageUrl: `${baseUrl}${processedImage.processedImages.thumbnails.url}`,
       message: 'Newsletter image uploaded successfully'
     });
 
