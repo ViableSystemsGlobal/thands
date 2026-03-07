@@ -21,6 +21,7 @@ const ManageGiftVoucherTypes = lazy(() => import("@/pages/admin/ManageGiftVouche
 const IssuedGiftVouchers = lazy(() => import("@/pages/admin/IssuedGiftVouchers"));
 const ProductFAQs = lazy(() => import("@/pages/admin/ProductFAQs"));
 const UserManagement = lazy(() => import("@/pages/admin/UserManagement"));
+const AdminProfile = lazy(() => import("@/pages/admin/Profile"));
 const AdminCouponsPage = lazy(() => import("@/pages/admin/Coupons"));
 const KnowledgeBase = lazy(() => import("@/pages/admin/KnowledgeBase"));
 const Newsletter = lazy(() => import("@/pages/admin/Newsletter"));
@@ -66,6 +67,7 @@ const AdminRoutes = () => {
           <Route path="issued-gift-vouchers" element={<IssuedGiftVouchers />} />
           <Route path="product-faqs" element={<ProductFAQs />} />
           <Route path="user-management" element={<UserManagement />} />
+          <Route path="profile" element={<AdminProfile />} />
           <Route path="coupons" element={<AdminCouponsPage />} />
           <Route path="knowledge-base" element={<KnowledgeBase />} />
           <Route path="newsletter" element={<Newsletter />} />

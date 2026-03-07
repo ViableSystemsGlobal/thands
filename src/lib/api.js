@@ -37,13 +37,7 @@ class ApiClient {
     }
 
     try {
-      console.log('🌐 API Client: Making request to:', url);
-      console.log('🔐 API Client: Auth header:', config.headers.Authorization ? 'Present' : 'Missing');
-      console.log('🔐 API Client: Token value:', config.headers.Authorization);
-      
       const response = await fetch(url, config);
-      console.log('📡 API Client: Response status:', response.status);
-      console.log('📡 API Client: Response ok:', response.ok);
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Network error' }));
@@ -52,7 +46,6 @@ class ApiClient {
       }
 
       const data = await response.json();
-      console.log('✅ API Client: Response data:', data);
       return data;
     } catch (error) {
       console.error('❌ API Client: Request failed:', error);

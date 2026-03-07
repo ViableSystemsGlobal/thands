@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useToast } from '@/components/ui/use-toast';
 import { useShop } from '@/context/ShopContext';
 import { useCurrency } from '@/context/CurrencyContext';
-import { supabase } from '@/lib/supabase';
 import { customerApi } from '@/lib/services/customerApi';
 import { ordersApi } from '@/lib/services/ordersApi';
 import { createPaymentRecord } from '@/lib/services/payment';
@@ -69,16 +68,12 @@ export const usePaymentFirst = () => {
         payment_completed_at: new Date().toISOString(),
       };
 
-      // Add coupon fields only if they exist
-      if (appliedCoupon) {
-        // Only set coupon_id for regular coupons, not gift vouchers
-        if (appliedCoupon.type === 'coupon') {
-          orderPayload.coupon_id = appliedCoupon.id;
-        }
-        // For gift vouchers, we'll handle them separately below
+      // Add discount fields if a coupon or gift voucher was applied
+      if (appliedCoupon && appliedCoupon.code) {
+        orderPayload.voucher_code = appliedCoupon.code;
       }
       if (couponDiscountAmount) {
-        orderPayload.coupon_discount_amount = parseFloat(couponDiscountAmount.toFixed(2));
+        orderPayload.voucher_discount = parseFloat(couponDiscountAmount.toFixed(2));
       }
 
       // Add items to order payload
@@ -145,17 +140,6 @@ export const usePaymentFirst = () => {
             redemptionAmount: appliedCoupon.calculated_discount,
             orderNumber: order.order_number
           });
-          
-          // Update the order with gift voucher redemption info
-          await supabase
-            .from('orders')
-            .update({
-              gift_voucher_code: appliedCoupon.code,
-              gift_voucher_id: appliedCoupon.id,
-              gift_voucher_redemption_amount: appliedCoupon.calculated_discount,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', order.id);
             
         } catch (voucherError) {
           console.error('Error redeeming gift voucher:', voucherError);
@@ -289,74 +273,19 @@ export const usePaymentFirst = () => {
           isNewAuthUser = true;
         }
       } else {
-        // Handle authenticated user
-        const { data: existingCustomer, error: customerFetchError } = await supabase
-          .from('customers')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-
-        if (customerFetchError && customerFetchError.code !== 'PGRST116') {
-          console.error("Error fetching customer for authenticated user:", customerFetchError);
-          throw new Error(`Failed to fetch customer record: ${customerFetchError.message}`);
-        }
-
-        if (existingCustomer) {
-          // Update existing customer record
-          const updatedCustomerRecord = {
-            first_name: formData.firstName,
-            last_name: formData.lastName,
-            phone: formData.phone,
-            address: formData.address,
-            city: formData.city,
-            state: formData.state,
-            country: formData.country,
-            postal_code: formData.postalCode,
-            updated_at: new Date().toISOString(),
-          };
-
-          const { data: updatedCustomer, error: updateError } = await supabase
-            .from('customers')
-            .update(updatedCustomerRecord)
-            .eq('id', user.id)
-            .select()
-            .single();
-
-          if (updateError) {
-            console.error("Error updating customer record:", updateError);
-            throw new Error(`Failed to update customer record: ${updateError.message}`);
-          }
-
-          customerRecord = updatedCustomer;
-        } else {
-          // Create new customer record for authenticated user
-          const newCustomerRecord = {
-            id: user.id,
+        // Handle authenticated user — look up or create customer by email
+        customerRecord = await customerApi.getOrCreateCustomer(
+          {
             email: user.email || formData.email,
-            first_name: formData.firstName,
-            last_name: formData.lastName,
+            firstName: formData.firstName,
+            lastName: formData.lastName,
             phone: formData.phone,
-            address: formData.address,
-            city: formData.city,
-            state: formData.state,
-            country: formData.country,
-            postal_code: formData.postalCode,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          };
+          },
+          false
+        );
 
-          const { data: createdCustomer, error: createError } = await supabase
-            .from('customers')
-            .insert([newCustomerRecord])
-            .select()
-            .single();
-
-          if (createError) {
-            console.error("Error creating customer record for authenticated user:", createError);
-            throw new Error(`Failed to create customer record: ${createError.message}`);
-          }
-
-          customerRecord = createdCustomer;
+        if (!customerRecord || !customerRecord.id) {
+          throw new Error("Failed to retrieve customer record for authenticated user.");
         }
       }
 

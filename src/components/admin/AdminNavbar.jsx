@@ -10,23 +10,35 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { 
-  Search, 
-  Eye, 
-  User, 
-  Settings, 
-  LogOut, 
+import {
+  Search,
+  Eye,
+  User,
+  Settings,
+  LogOut,
   Bell,
-  Menu
+  Menu,
+  ShoppingBag,
+  MessageSquare,
 } from 'lucide-react';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
+import { useNotifications } from '@/hooks/useNotifications';
+
+function timeAgo(dateStr) {
+  const diff = (Date.now() - new Date(dateStr)) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
 
 const AdminNavbar = ({ onMobileMenuToggle }) => {
   const { user, logout } = useAdminAuth();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
+  const { notifications, total } = useNotifications();
 
   const handleViewWebsite = () => {
     // Open main website in new tab
@@ -110,15 +122,62 @@ const AdminNavbar = ({ onMobileMenuToggle }) => {
           </Button>
 
           {/* Notifications */}
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="h-5 w-5" />
-            <Badge 
-              variant="destructive" 
-              className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center text-xs p-0"
-            >
-              3
-            </Badge>
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="relative">
+                <Bell className="h-5 w-5" />
+                {total > 0 && (
+                  <Badge
+                    variant="destructive"
+                    className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center text-xs p-0"
+                  >
+                    {total > 99 ? '99+' : total}
+                  </Badge>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-80">
+              <DropdownMenuLabel className="font-semibold">
+                Notifications {total > 0 && <span className="text-muted-foreground font-normal">({total})</span>}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {notifications.length === 0 ? (
+                <div className="py-6 text-center text-sm text-muted-foreground">
+                  No new notifications
+                </div>
+              ) : (
+                notifications.map((n) => (
+                  <DropdownMenuItem
+                    key={`${n.type}-${n.id}`}
+                    className="flex items-start gap-3 py-3 cursor-pointer"
+                    onClick={() => navigate(n.path)}
+                  >
+                    <div className="mt-0.5 flex-shrink-0 text-muted-foreground">
+                      {n.type === 'order' ? (
+                        <ShoppingBag className="h-4 w-4 text-indigo-500" />
+                      ) : (
+                        <MessageSquare className="h-4 w-4 text-emerald-500" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{n.title}</p>
+                      <p className="text-xs text-muted-foreground truncate">{n.subtitle}</p>
+                    </div>
+                    <span className="text-xs text-muted-foreground whitespace-nowrap flex-shrink-0">
+                      {timeAgo(n.time)}
+                    </span>
+                  </DropdownMenuItem>
+                ))
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="justify-center text-sm text-indigo-600 font-medium"
+                onClick={() => navigate('/admin/orders')}
+              >
+                View all orders
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
           {/* Profile Dropdown */}
           <DropdownMenu>
@@ -148,7 +207,7 @@ const AdminNavbar = ({ onMobileMenuToggle }) => {
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               
-              <DropdownMenuItem onClick={() => navigate('/admin/user-management')}>
+              <DropdownMenuItem onClick={() => navigate('/admin/profile')}>
                 <User className="mr-2 h-4 w-4" />
                 <span>Profile</span>
               </DropdownMenuItem>

@@ -165,6 +165,34 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const googleLogin = async (credential) => {
+    try {
+      setLoading(true);
+      const response = await authApi.googleAuth(credential);
+
+      authApi.setAuthData(response.user, response.token);
+      setUser(response.user);
+      setIsAuthenticated(true);
+
+      toast({
+        title: "Welcome!",
+        description: `Signed in as ${response.user.firstName || response.user.email}`,
+      });
+
+      return response;
+    } catch (error) {
+      const errorMessage = error.message || 'Google sign-in failed';
+      toast({
+        title: "Google Sign-In Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const refreshUser = async () => {
     try {
       const response = await authApi.getProfile();
@@ -191,6 +219,7 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated,
     login,
     register,
+    googleLogin,
     logout,
     updateProfile,
     changePassword,

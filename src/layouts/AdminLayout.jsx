@@ -87,6 +87,8 @@ const AdminLayout = () => {
             <button 
               onClick={() => {
                 localStorage.removeItem('auth_token');
+                localStorage.removeItem('admin_auth_token');
+                localStorage.removeItem('admin_user');
                 window.location.reload();
               }}
               className="px-4 py-2 bg-sky-600 hover:bg-sky-500 text-white rounded-lg transition-colors"

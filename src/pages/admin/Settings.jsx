@@ -48,7 +48,9 @@ const SettingsNew = () => {
     footer_logo_url: '',
     favicon_url: '',
     captcha_enabled: false,
-    google_places_api_key: ''
+    google_places_api_key: '',
+    google_auth_enabled: false,
+    google_client_id: ''
   });
 
   const [passwordData, setPasswordData] = useState({
@@ -230,7 +232,9 @@ const SettingsNew = () => {
             footer_logo_url: response.settings.footer_logo_url || '',
             favicon_url: response.settings.favicon_url || '',
             captcha_enabled: response.settings.captcha_enabled || false,
-            google_places_api_key: response.settings.google_places_api_key || ''
+            google_places_api_key: response.settings.google_places_api_key || '',
+            google_auth_enabled: response.settings.google_auth_enabled || false,
+            google_client_id: response.settings.google_client_id || ''
           });
         }
       } catch (error) {
@@ -285,7 +289,9 @@ const SettingsNew = () => {
         favicon_url: settings.favicon_url,
         navbar_logo_url: settings.navbar_logo_url,
         footer_logo_url: settings.footer_logo_url,
-        captcha_enabled: settings.captcha_enabled
+        captcha_enabled: settings.captcha_enabled,
+        google_auth_enabled: settings.google_auth_enabled,
+        google_client_id: settings.google_client_id || null,
       };
 
       console.log('🔍 Frontend sending to backend:', {
@@ -2192,6 +2198,7 @@ const SettingsNew = () => {
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-6">
+                      {/* Google Places API Key */}
                       <div>
                         <Label htmlFor="google_places_api_key">Google Places API Key</Label>
                         <Input
@@ -2205,19 +2212,58 @@ const SettingsNew = () => {
                           placeholder="AIzaSyB..."
                         />
                         <p className="text-sm text-gray-500 mt-1">
-                          Get your API key from the Google Cloud Console. Enable Places API and restrict it to your domain.
+                          Used for address autocomplete at checkout. Enable the Places API in Google Cloud Console.
                         </p>
                       </div>
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                        <h4 className="font-medium text-blue-900 mb-2">Setup Instructions:</h4>
-                        <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
-                          <li>Go to <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">Google Cloud Console</a></li>
-                          <li>Create a new project or select existing one</li>
-                          <li>Enable the "Places API"</li>
-                          <li>Go to "Credentials" and create an API key</li>
-                          <li>Restrict the API key to your domain for security</li>
-                          <li>Copy the API key and paste it above</li>
-                        </ol>
+
+                      <div className="border-t pt-6">
+                        <h4 className="text-base font-semibold text-gray-800 mb-1">Google Sign-In</h4>
+                        <p className="text-sm text-gray-500 mb-4">
+                          Allow customers to sign in and create accounts using their Google account.
+                        </p>
+
+                        {/* Enable toggle */}
+                        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg mb-4">
+                          <div>
+                            <p className="font-medium text-gray-700">Enable Google Sign-In</p>
+                            <p className="text-sm text-gray-500">Show "Continue with Google" on login and signup pages</p>
+                          </div>
+                          <Switch
+                            checked={settings.google_auth_enabled || false}
+                            onCheckedChange={(checked) => setSettings(prev => ({ ...prev, google_auth_enabled: checked }))}
+                          />
+                        </div>
+
+                        {settings.google_auth_enabled && (
+                          <div className="space-y-4">
+                            <div>
+                              <Label htmlFor="google_client_id">Google OAuth Client ID</Label>
+                              <Input
+                                id="google_client_id"
+                                type="text"
+                                value={settings.google_client_id || ''}
+                                onChange={(e) => setSettings(prev => ({ ...prev, google_client_id: e.target.value }))}
+                                placeholder="1234567890-abcdefg.apps.googleusercontent.com"
+                              />
+                              <p className="text-sm text-gray-500 mt-1">
+                                The OAuth 2.0 Client ID from Google Cloud Console → Credentials.
+                              </p>
+                            </div>
+
+                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                              <h5 className="font-medium text-blue-900 mb-2">Setup Instructions:</h5>
+                              <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
+                                <li>Go to <a href="https://console.cloud.google.com/" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">Google Cloud Console</a></li>
+                                <li>Navigate to APIs &amp; Services → Credentials</li>
+                                <li>Click "Create Credentials" → OAuth 2.0 Client ID</li>
+                                <li>Set Application type to "Web application"</li>
+                                <li>Add your domain to "Authorized JavaScript origins" (e.g. <code className="bg-blue-100 px-1 rounded">https://yourdomain.com</code>)</li>
+                                <li>Copy the Client ID and paste it above</li>
+                                <li>Also enable the "Google Sign-In" (or "People API") for your project</li>
+                              </ol>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>

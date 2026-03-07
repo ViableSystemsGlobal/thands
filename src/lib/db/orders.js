@@ -36,8 +36,9 @@ export const fetchOrdersForAdmin = async (filters) => {
       }
   }
   
-  if (searchQuery) {
-    const searchLower = `%${searchQuery.toLowerCase()}%`;
+  if (searchQuery && typeof searchQuery === 'string' && searchQuery.trim().length > 0) {
+    const sanitized = searchQuery.trim().slice(0, 100);
+    const searchLower = `%${sanitized.toLowerCase()}%`;
     query = query.or(
       `order_number.ilike.${searchLower},` +
       `customers.first_name.ilike.${searchLower},customers.last_name.ilike.${searchLower},customers.email.ilike.${searchLower},` +

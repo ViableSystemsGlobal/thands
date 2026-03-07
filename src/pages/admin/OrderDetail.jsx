@@ -152,9 +152,12 @@ const OrderDetail = () => {
           country: order.shipping_country,
         },
       });
-      setRates(res.data.rates || []);
-      if ((res.data.rates || []).length === 0) {
+      const fetchedRates = res.data.rates || [];
+      setRates(fetchedRates);
+      if (fetchedRates.length === 0) {
         toast({ title: 'No rates found', description: 'No shipping options available for this address.', variant: 'destructive' });
+      } else {
+        setSelectedRate(fetchedRates[0]);
       }
     } catch (err) {
       toast({ title: 'Error fetching rates', description: err.message, variant: 'destructive' });

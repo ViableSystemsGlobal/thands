@@ -233,30 +233,31 @@ router.post('/', [
     // Create order items
     if (items && items.length > 0) {
       for (const item of items) {
-        // Validate that exactly one of product_id or gift_voucher_type_id is provided
         const hasProductId = item.product_id && item.product_id.trim() !== '';
         const hasGiftVoucherId = item.gift_voucher_type_id && item.gift_voucher_type_id.trim() !== '';
-        
-        if (!hasProductId && !hasGiftVoucherId) {
-          console.error('Order item missing both product_id and gift_voucher_type_id:', item);
-          throw new Error('Order item must have either product_id or gift_voucher_type_id');
+        const hasCustomName = item.custom_item_name && item.custom_item_name.trim() !== '';
+
+        if (!hasProductId && !hasGiftVoucherId && !hasCustomName) {
+          console.error('Order item missing product_id, gift_voucher_type_id, and custom_item_name:', item);
+          throw new Error('Order item must have a product, gift voucher, or custom item name');
         }
-        
+
         if (hasProductId && hasGiftVoucherId) {
           console.error('Order item has both product_id and gift_voucher_type_id:', item);
           throw new Error('Order item cannot have both product_id and gift_voucher_type_id');
         }
 
         await query(
-          `INSERT INTO order_items (order_id, product_id, gift_voucher_type_id, quantity, size, price)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
+          `INSERT INTO order_items (order_id, product_id, gift_voucher_type_id, quantity, size, price, custom_item_name)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
           [
             order.id,
             hasProductId ? item.product_id : null,
             hasGiftVoucherId ? item.gift_voucher_type_id : null,
             item.quantity,
             item.size || null,
-            item.price
+            item.price,
+            hasCustomName ? item.custom_item_name : null
           ]
         );
       }
@@ -329,6 +330,76 @@ router.get('/by-number/:orderNumber', async (req, res) => {
   } catch (error) {
     console.error('❌ Order fetch error:', error);
     res.status(500).json({ error: 'Failed to fetch order', details: error.message });
+  }
+});
+
+// Bulk update order status (Admin only)
+router.patch('/bulk-status', authenticateToken, async (req, res) => {
+  try {
+    const adminRoles = ['super_admin', 'admin', 'manager', 'support'];
+    if (!adminRoles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { ids, status, payment_status } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids array is required' });
+    }
+    if (!status && !payment_status) {
+      return res.status(400).json({ error: 'status or payment_status is required' });
+    }
+
+    let updateQuery = 'UPDATE orders SET updated_at = NOW()';
+    const params = [];
+    let paramCount = 0;
+
+    if (status) {
+      paramCount++;
+      updateQuery += `, status = $${paramCount}`;
+      params.push(status);
+    }
+    if (payment_status) {
+      paramCount++;
+      updateQuery += `, payment_status = $${paramCount}`;
+      params.push(payment_status);
+    }
+
+    paramCount++;
+    updateQuery += ` WHERE id = ANY($${paramCount}) RETURNING id`;
+    params.push(ids);
+
+    const result = await query(updateQuery, params);
+
+    res.json({ success: true, updated: result.rowCount });
+  } catch (error) {
+    console.error('Bulk status update error:', error);
+    res.status(500).json({ error: 'Failed to bulk update orders' });
+  }
+});
+
+// Bulk delete orders (Admin only)
+router.delete('/bulk', authenticateToken, async (req, res) => {
+  try {
+    const adminRoles = ['super_admin', 'admin', 'manager'];
+    if (!adminRoles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'ids array is required' });
+    }
+
+    // Delete order items first (foreign key)
+    await query('DELETE FROM order_items WHERE order_id = ANY($1)', [ids]);
+    const result = await query('DELETE FROM orders WHERE id = ANY($1) RETURNING id', [ids]);
+
+    res.json({ success: true, deleted: result.rowCount });
+  } catch (error) {
+    console.error('Bulk delete error:', error);
+    res.status(500).json({ error: 'Failed to bulk delete orders' });
   }
 });
 

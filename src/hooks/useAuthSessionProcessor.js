@@ -36,10 +36,8 @@ export const useAuthSessionProcessor = (options) => {
       if (!userProfile && currentSession.user.email) {
           console.log("AuthSessionProcessor: No profile found or fetch failed, attempting to create one for:", currentSession.user.email);
           
-          // Determine role based on email domain
-          const isAdmin = currentSession.user.email.includes('@tailoredhands.') || 
-                         currentSession.user.email === 'admin@tailoredhands.com';
-          const role = isAdmin ? 'admin' : 'customer';
+          // All new profiles default to customer. Admin roles must be assigned manually in the database.
+          const role = 'customer';
           
           try {
             const newProfileData = await createInitialUserProfile(

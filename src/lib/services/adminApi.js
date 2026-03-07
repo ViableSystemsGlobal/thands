@@ -178,6 +178,36 @@ export const getConsultationMetrics = async () => {
   return response.data; // Return the data directly instead of the wrapped response
 };
 
+export const bulkUpdateOrderStatus = async (ids, status, payment_status) => {
+  const response = await adminApiClient.patch('/orders/bulk-status', { ids, status, payment_status });
+  return response.data;
+};
+
+export const bulkDeleteOrders = async (ids) => {
+  const response = await adminApiClient.makeRequest('/orders/bulk', {
+    method: 'DELETE',
+    body: JSON.stringify({ ids }),
+    headers: { 'Content-Type': 'application/json' },
+  });
+  return response.data;
+};
+
+export const createOrder = async (orderData) => {
+  const response = await adminApiClient.post('/orders', orderData);
+  return response.data;
+};
+
+export const getGiftVoucherTypes = async () => {
+  const response = await adminApiClient.get('/gift-vouchers/types');
+  return response.data;
+};
+
+// Admin Notifications API
+export const getAdminNotifications = async () => {
+  const response = await adminApiClient.get('/admin/notifications');
+  return response.data;
+};
+
 // Admin Sales API
 export const getSalesAnalytics = async (params = {}) => {
   const queryParams = new URLSearchParams();

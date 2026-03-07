@@ -564,7 +564,7 @@ const ProductDialog = ({ isOpen, onClose, product, onSuccess }) => {
                 placeholder="621132"
               />
               <p className="text-xs text-gray-500 mt-1">
-                Default 621132 (men's other garments — cotton). Use 620319 for suits.
+                621132 = men's garments (cotton, default) · 621142 = women's garments (cotton) · 620312 = men's suits (cotton) · 620319 = men's suits (other materials)
               </p>
             </div>
 

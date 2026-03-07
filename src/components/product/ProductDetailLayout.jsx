@@ -1,5 +1,6 @@
 
 import React from 'react';
+import DOMPurify from 'dompurify';
 import { motion } from 'framer-motion';
 import { Loader2, Star, ShoppingCart, Heart, MessageSquare, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -89,7 +90,7 @@ const ProductDetailLayout = ({
                 Product Description
               </AccordionTrigger>
               <AccordionContent className="text-gray-600 leading-relaxed prose max-w-none py-4">
-                <div dangerouslySetInnerHTML={{ __html: product.description || "<p>No description available.</p>" }} />
+                <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(product.description || "<p>No description available.</p>") }} />
               </AccordionContent>
             </AccordionItem>
             

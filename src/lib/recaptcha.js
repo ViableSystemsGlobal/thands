@@ -116,15 +116,21 @@ export async function requireRecaptchaVerification(token, remoteip = null) {
  * @returns {Promise<boolean>} - Whether verification was successful
  */
 export async function verifyRecaptchaWithDevMode(token, remoteip = null) {
-  // In development mode, you can bypass reCAPTCHA for testing
+  // Never bypass reCAPTCHA in production, regardless of env vars
+  const isProduction = process.env.NODE_ENV === 'production';
+  if (isProduction) {
+    return requireRecaptchaVerification(token, remoteip);
+  }
+
+  // In non-production environments, allow bypass only when explicitly configured
   const isDevelopment = process.env.NODE_ENV === 'development';
   const skipRecaptchaInDev = process.env.SKIP_RECAPTCHA_IN_DEV === 'true';
-  
+
   if (isDevelopment && skipRecaptchaInDev) {
     console.warn('⚠️  reCAPTCHA verification skipped in development mode');
     return true;
   }
-  
+
   return requireRecaptchaVerification(token, remoteip);
 }
 

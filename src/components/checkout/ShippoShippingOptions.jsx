@@ -24,11 +24,16 @@ const ShippoShippingOptions = ({
   // Check if address is international (not Ghana)
   const isInternational = address?.country && address.country !== 'Ghana' && address.country !== 'GH';
 
+  const isAddressComplete = (addr) =>
+    addr?.address && addr?.city && addr?.country && addr?.postalCode;
+
   useEffect(() => {
-    if (address && cartItems?.length > 0) {
+    if (isAddressComplete(address) && cartItems?.length > 0) {
       fetchShippingRates();
     }
-  }, [address, cartItems]);
+  // Re-fetch only when the key address fields change, not on every keystroke
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [address?.country, address?.postalCode, address?.city, address?.address, cartItems?.length]);
 
   const fetchShippingRates = async () => {
     try {

@@ -1,6 +1,7 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Eye, Loader2, Trash2 } from "lucide-react";
 import { useCurrency } from "@/context/CurrencyContext";
 import PaginationControls from "@/components/admin/PaginationControls";
@@ -10,7 +11,8 @@ const OrderTable = ({
   onUpdateStatus,
   onViewDetails,
   onDelete,
-  loading, 
+  onSelectionChange,
+  loading,
   initialLoading,
   currentPage,
   totalPages,
@@ -21,6 +23,36 @@ const OrderTable = ({
 }) => {
   const navigate = useNavigate();
   const { formatPrice, exchangeRate, convertToGHS } = useCurrency();
+  const [selectedIds, setSelectedIds] = useState(new Set());
+
+  const allOnPageSelected = orders.length > 0 && orders.every((o) => selectedIds.has(o.id));
+  const someOnPageSelected = orders.some((o) => selectedIds.has(o.id));
+
+  const handleSelectAll = (checked) => {
+    if (checked) {
+      const next = new Set(selectedIds);
+      orders.forEach((o) => next.add(o.id));
+      setSelectedIds(next);
+      onSelectionChange?.(Array.from(next));
+    } else {
+      const next = new Set(selectedIds);
+      orders.forEach((o) => next.delete(o.id));
+      setSelectedIds(next);
+      onSelectionChange?.(Array.from(next));
+    }
+  };
+
+  const handleSelectOne = (orderId, checked) => {
+    const next = new Set(selectedIds);
+    if (checked) next.add(orderId);
+    else next.delete(orderId);
+    setSelectedIds(next);
+    onSelectionChange?.(Array.from(next));
+  };
+
+  useEffect(() => {
+    if (!orders.length) setSelectedIds(new Set());
+  }, [orders.length, currentPage]);
 
   const getPaymentStatusClass = (status) => {
     switch (status?.toLowerCase()) {
@@ -61,6 +93,13 @@ const OrderTable = ({
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr className="border-b border-gray-200">
+              <th className="w-10 py-3 px-4">
+                <Checkbox
+                  checked={allOnPageSelected ? true : someOnPageSelected ? "indeterminate" : false}
+                  onCheckedChange={handleSelectAll}
+                  aria-label="Select all orders on page"
+                />
+              </th>
               <th className="text-left py-3 px-4 font-medium text-gray-600">Order #</th>
               <th className="text-left py-3 px-4 font-medium text-gray-600">Customer</th>
               <th className="text-left py-3 px-4 font-medium text-gray-600">Total (USD)</th>
@@ -74,21 +113,21 @@ const OrderTable = ({
           <tbody className="bg-white divide-y divide-gray-200">
             {initialLoading ? (
               <tr>
-                <td colSpan="8" className="text-center py-10 text-gray-500">
+                <td colSpan="9" className="text-center py-10 text-gray-500">
                   <Loader2 className="h-8 w-8 animate-spin text-indigo-600 mx-auto mb-2" />
                   Loading orders...
                 </td>
               </tr>
             ) : loading && orders.length === 0 && !initialLoading ? (
                <tr>
-                <td colSpan="8" className="text-center py-10 text-gray-500">
+                <td colSpan="9" className="text-center py-10 text-gray-500">
                   <Loader2 className="h-8 w-8 animate-spin text-indigo-600 mx-auto mb-2" />
                   Fetching orders...
                 </td>
               </tr>
             ) : !loading && orders.length === 0 ? (
               <tr>
-                <td colSpan="8" className="text-center py-10 text-gray-500">No orders found for the selected criteria.</td>
+                <td colSpan="9" className="text-center py-10 text-gray-500">No orders found for the selected criteria.</td>
               </tr>
             ) : (
               orders.map((order) => {
@@ -135,6 +174,13 @@ const OrderTable = ({
                 
                 return (
                   <tr key={order.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="w-10 py-3 px-4">
+                      <Checkbox
+                        checked={selectedIds.has(order.id)}
+                        onCheckedChange={(checked) => handleSelectOne(order.id, !!checked)}
+                        aria-label={`Select order ${order.order_number}`}
+                      />
+                    </td>
                     <td className="py-3 px-4 text-gray-700">{order.order_number}</td>
                     <td className="py-3 px-4">
                       <div>

@@ -6,12 +6,13 @@ import { useToast } from "@/components/ui/use-toast";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import GoogleSignInButton from "@/components/auth/GoogleSignInButton";
 
 const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
-  const { isAuthenticated, login } = useAuth();
+  const { isAuthenticated, login, googleLogin } = useAuth();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
@@ -25,6 +26,19 @@ const Login = () => {
       navigate(from, { replace: true });
     }
   }, [isAuthenticated, navigate, location.state]);
+
+  const handleGoogleCredential = async (credential) => {
+    setLoading(true);
+    try {
+      await googleLogin(credential);
+      const from = location.state?.from?.pathname || "/";
+      navigate(from, { replace: true });
+    } catch (error) {
+      // error toast is shown by googleLogin
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -134,6 +148,8 @@ const Login = () => {
                   Sign up
                 </Link>
               </p>
+
+              <GoogleSignInButton onCredential={handleGoogleCredential} />
             </form>
           </div>
         </motion.div>

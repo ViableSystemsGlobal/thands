@@ -127,28 +127,70 @@ router.get('/dashboard', async (req, res) => {
       topProductsParams
     );
 
+    // Get daily revenue for sales chart
+    const salesChartParams = branchFilterObj ? [startDate, endDate, branchFilterObj.value] : [startDate, endDate];
+    const salesChartBranchSQL = branchFilterObj ? branchFilterObj.condition.replace('$', '$3') : '';
+    const salesChartResult = await query(
+      `SELECT DATE(created_at) as sale_date,
+              SUM(CASE WHEN payment_status = 'paid' THEN base_total ELSE 0 END) as daily_revenue,
+              COUNT(*) as daily_orders
+       FROM orders o
+       WHERE created_at >= $1 AND created_at <= $2 ${salesChartBranchSQL}
+       GROUP BY DATE(created_at)
+       ORDER BY sale_date ASC`,
+      salesChartParams
+    );
+
+    // Get order status breakdown
+    const statusBreakdownResult = await query(
+      `SELECT status, COUNT(*) as count
+       FROM orders o
+       WHERE created_at >= $1 AND created_at <= $2 ${salesChartBranchSQL}
+       GROUP BY status`,
+      salesChartParams
+    );
+
+    // Format sales chart data for Chart.js
+    const chartLabels = salesChartResult.rows.map(r =>
+      new Date(r.sale_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    );
+    const chartRevenue = salesChartResult.rows.map(r => parseFloat(r.daily_revenue || 0));
+
+    const salesChartData = {
+      labels: chartLabels,
+      datasets: [{
+        label: 'Revenue (USD)',
+        data: chartRevenue,
+        borderColor: 'rgb(99, 102, 241)',
+        backgroundColor: 'rgba(99, 102, 241, 0.15)',
+        tension: 0.4,
+        fill: true,
+        pointBackgroundColor: 'rgb(99, 102, 241)',
+        pointRadius: 4,
+      }]
+    };
+
     const dashboardData = {
       stats: {
         totalOrders: parseInt(ordersResult.rows[0]?.total_orders || 0),
-        totalSales: parseFloat(ordersResult.rows[0]?.total_revenue || 0), // Frontend expects totalSales
+        totalSales: parseFloat(ordersResult.rows[0]?.total_revenue || 0),
         avgOrderValue: parseFloat(ordersResult.rows[0]?.avg_order_value || 0),
-        totalCustomers: parseInt(customersResult.rows[0]?.total_customers || 0), // Frontend expects totalCustomers
-        pendingOrders: parseInt(ordersResult.rows[0]?.pending_orders || 0), // Frontend expects pendingOrders
-        pendingPayments: parseInt(ordersResult.rows[0]?.pending_payments || 0), // New metric for pending payments
+        totalCustomers: parseInt(customersResult.rows[0]?.total_customers || 0),
+        pendingOrders: parseInt(ordersResult.rows[0]?.pending_orders || 0),
+        pendingPayments: parseInt(ordersResult.rows[0]?.pending_payments || 0),
         totalProducts: parseInt(productsResult.rows[0]?.total_products || 0),
-        // Newsletter metrics
         totalNewsletterSubscribers: parseInt(newsletterResult.rows[0]?.total_subscribers || 0),
         activeNewsletterSubscribers: parseInt(newsletterResult.rows[0]?.active_subscribers || 0),
         newNewsletterSubscribers: parseInt(newsletterResult.rows[0]?.new_subscribers_this_period || 0),
-        // Visitor metrics
         totalVisitors: parseInt(visitorResult.rows[0]?.total_visitors || 0),
         visitorsThisPeriod: parseInt(visitorResult.rows[0]?.visitors_this_period || 0),
         uniqueVisitDays: parseInt(visitorResult.rows[0]?.unique_visit_days || 0),
-        // Daily visitor data for chart
-        dailyVisitors: dailyVisitorsResult.rows
+        dailyVisitors: dailyVisitorsResult.rows,
+        orderStatusBreakdown: statusBreakdownResult.rows,
       },
       recentOrders: recentOrdersResult.rows,
-      topProducts: topProductsResult.rows
+      topProducts: topProductsResult.rows,
+      salesChartData,
     };
 
     res.json({
@@ -234,7 +276,9 @@ router.put('/settings', async (req, res) => {
         navbar_logo_url,
         footer_logo_url,
         captcha_enabled,
-        google_places_api_key
+        google_places_api_key,
+        google_auth_enabled,
+        google_client_id
       } = req.body;
       
       console.log('🔍 Destructured Paystack keys:', {
@@ -258,13 +302,15 @@ router.put('/settings', async (req, res) => {
           currency, timezone, exchange_rate_ghs, exchange_rate_gbp, paystack_public_key, paystack_secret_key,
           hero_image_url, hero_title, hero_subtitle, hero_button_text, favicon_url,
           navbar_logo_url, footer_logo_url, captcha_enabled, google_places_api_key,
+          google_auth_enabled, google_client_id,
           created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, NOW(), NOW())
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), NOW())
          RETURNING *`,
         [store_name, contact_email, contact_phone, address, store_description,
          currency, timezone, exchange_rate_ghs, exchange_rate_gbp || 0.79, paystack_public_key, paystack_secret_key,
          hero_image_url, hero_title, hero_subtitle, hero_button_text, favicon_url,
-         navbar_logo_url, footer_logo_url, captcha_enabled, google_places_api_key]
+         navbar_logo_url, footer_logo_url, captcha_enabled, google_places_api_key,
+         google_auth_enabled || false, google_client_id || null]
       );
     } else {
       // Update existing settings
@@ -290,13 +336,16 @@ router.put('/settings', async (req, res) => {
           footer_logo_url = COALESCE($18, footer_logo_url),
           captcha_enabled = COALESCE($19, captcha_enabled),
           google_places_api_key = COALESCE($20, google_places_api_key),
+          google_auth_enabled = COALESCE($21, google_auth_enabled),
+          google_client_id = COALESCE($22, google_client_id),
           updated_at = NOW()
-        WHERE id = $21
+        WHERE id = $23
         RETURNING *`,
         [store_name, contact_email, contact_phone, address, store_description,
          currency, timezone, exchange_rate_ghs, exchange_rate_gbp || 0.79, paystack_public_key, paystack_secret_key,
          hero_image_url, hero_title, hero_subtitle, hero_button_text, favicon_url,
-         navbar_logo_url, footer_logo_url, captcha_enabled, google_places_api_key, existingSettings.rows[0].id]
+         navbar_logo_url, footer_logo_url, captcha_enabled, google_places_api_key,
+         google_auth_enabled ?? null, google_client_id ?? null, existingSettings.rows[0].id]
       );
       
       console.log('🔍 SQL UPDATE executed with Paystack keys:', {
@@ -429,6 +478,55 @@ router.put('/settings/google-places-api-key', async (req, res) => {
       success: false, 
       error: 'Failed to update Google Places API key' 
     });
+  }
+});
+
+// GET /api/admin/notifications - New orders + unread messages for the bell
+router.get('/notifications', async (req, res) => {
+  try {
+    const [ordersResult, messagesResult] = await Promise.all([
+      query(
+        `SELECT id, order_number, created_at, base_total,
+                shipping_first_name, shipping_last_name
+         FROM orders
+         WHERE status = 'pending'
+           AND created_at >= NOW() - INTERVAL '7 days'
+         ORDER BY created_at DESC
+         LIMIT 10`
+      ),
+      query(
+        `SELECT id, name, subject, message, created_at
+         FROM messages
+         WHERE status = 'new'
+         ORDER BY created_at DESC
+         LIMIT 10`
+      ),
+    ]);
+
+    const items = [
+      ...ordersResult.rows.map((o) => ({
+        type: 'order',
+        id: o.id,
+        title: `New order ${o.order_number}`,
+        subtitle: `${o.shipping_first_name || ''} ${o.shipping_last_name || ''}`.trim() ||
+                  'Customer',
+        time: o.created_at,
+        path: '/admin/orders',
+      })),
+      ...messagesResult.rows.map((m) => ({
+        type: 'message',
+        id: m.id,
+        title: m.subject || `Message from ${m.name}`,
+        subtitle: (m.message || '').substring(0, 60),
+        time: m.created_at,
+        path: '/admin/communication/messages',
+      })),
+    ].sort((a, b) => new Date(b.time) - new Date(a.time));
+
+    res.json({ total: items.length, items });
+  } catch (error) {
+    console.error('Error fetching notifications:', error);
+    res.status(500).json({ error: 'Failed to fetch notifications' });
   }
 });
 

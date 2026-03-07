@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const { query } = require('../config/database');
 const { authenticateToken, JWT_SECRET } = require('../middleware/auth');
+const { OAuth2Client } = require('google-auth-library');
 
 const router = express.Router();
 
@@ -134,7 +135,7 @@ router.post('/login', [
 router.get('/profile', authenticateToken, async (req, res) => {
   try {
     const result = await query(
-      `SELECT id, email, first_name, last_name, phone, role, email_verified, created_at, updated_at 
+      `SELECT id, email, first_name, last_name, full_name, phone, role, email_verified, created_at, updated_at
        FROM users WHERE id = $1`,
       [req.user.id]
     );
@@ -144,12 +145,16 @@ router.get('/profile', authenticateToken, async (req, res) => {
     }
 
     const user = result.rows[0];
+    // Admins use full_name; customers use first_name/last_name
+    const fullName = user.full_name ||
+      [user.first_name, user.last_name].filter(Boolean).join(' ') || '';
     res.json({
       user: {
         id: user.id,
         email: user.email,
         firstName: user.first_name,
         lastName: user.last_name,
+        fullName,
         phone: user.phone,
         role: user.role,
         emailVerified: user.email_verified,
@@ -168,6 +173,7 @@ router.get('/profile', authenticateToken, async (req, res) => {
 router.put('/profile', authenticateToken, [
   body('firstName').optional().trim().isLength({ min: 1 }),
   body('lastName').optional().trim().isLength({ min: 1 }),
+  body('fullName').optional().trim().isLength({ min: 1 }),
   body('phone').optional().trim(),
 ], async (req, res) => {
   try {
@@ -176,21 +182,42 @@ router.put('/profile', authenticateToken, [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { firstName, lastName, phone } = req.body;
+    const { firstName, lastName, fullName, phone } = req.body;
     const updates = [];
     const values = [];
     let paramCount = 0;
 
-    if (firstName !== undefined) {
+    if (fullName !== undefined) {
+      // Admin users — update full_name and derive first/last from it
+      const parts = fullName.trim().split(/\s+/);
+      const first = parts[0] || '';
+      const last = parts.slice(1).join(' ') || '';
+      paramCount++;
+      updates.push(`full_name = $${paramCount}`);
+      values.push(fullName.trim());
       paramCount++;
       updates.push(`first_name = $${paramCount}`);
-      values.push(firstName);
-    }
-
-    if (lastName !== undefined) {
+      values.push(first);
       paramCount++;
       updates.push(`last_name = $${paramCount}`);
-      values.push(lastName);
+      values.push(last);
+    } else {
+      if (firstName !== undefined) {
+        paramCount++;
+        updates.push(`first_name = $${paramCount}`);
+        values.push(firstName);
+      }
+      if (lastName !== undefined) {
+        paramCount++;
+        updates.push(`last_name = $${paramCount}`);
+        values.push(lastName);
+      }
+      if (firstName !== undefined || lastName !== undefined) {
+        // Keep full_name in sync for admin accounts
+        paramCount++;
+        updates.push(`full_name = $${paramCount}`);
+        values.push([firstName, lastName].filter(Boolean).join(' '));
+      }
     }
 
     if (phone !== undefined) {
@@ -203,15 +230,14 @@ router.put('/profile', authenticateToken, [
       return res.status(400).json({ error: 'No fields to update' });
     }
 
-    paramCount++;
     updates.push(`updated_at = CURRENT_TIMESTAMP`);
     paramCount++;
     values.push(req.user.id);
 
     const result = await query(
-      `UPDATE users SET ${updates.join(', ')} 
+      `UPDATE users SET ${updates.join(', ')}
        WHERE id = $${paramCount}
-       RETURNING id, email, first_name, last_name, phone, updated_at`,
+       RETURNING id, email, first_name, last_name, full_name, phone, updated_at`,
       values
     );
 
@@ -220,6 +246,8 @@ router.put('/profile', authenticateToken, [
     }
 
     const user = result.rows[0];
+    const resolvedFullName = user.full_name ||
+      [user.first_name, user.last_name].filter(Boolean).join(' ') || '';
     res.json({
       message: 'Profile updated successfully',
       user: {
@@ -227,6 +255,7 @@ router.put('/profile', authenticateToken, [
         email: user.email,
         firstName: user.first_name,
         lastName: user.last_name,
+        fullName: resolvedFullName,
         phone: user.phone,
         updatedAt: user.updated_at
       }
@@ -293,6 +322,99 @@ router.get('/verify', authenticateToken, (req, res) => {
       role: req.user.role
     }
   });
+});
+
+// GET /api/auth/google-config - Public endpoint to check if Google auth is enabled
+router.get('/google-config', async (req, res) => {
+  try {
+    const result = await query('SELECT google_auth_enabled, google_client_id FROM settings LIMIT 1');
+    if (result.rows.length === 0) {
+      return res.json({ enabled: false, clientId: null });
+    }
+    const { google_auth_enabled, google_client_id } = result.rows[0];
+    res.json({ enabled: !!google_auth_enabled, clientId: google_client_id || null });
+  } catch (error) {
+    console.error('Google config fetch error:', error);
+    res.json({ enabled: false, clientId: null });
+  }
+});
+
+// POST /api/auth/google - Sign in / sign up with Google
+router.post('/google', async (req, res) => {
+  try {
+    const { credential } = req.body;
+    if (!credential) {
+      return res.status(400).json({ error: 'Google credential is required' });
+    }
+
+    // Check if Google auth is enabled
+    const settingsResult = await query('SELECT google_auth_enabled, google_client_id FROM settings LIMIT 1');
+    const settings = settingsResult.rows[0];
+    if (!settings?.google_auth_enabled) {
+      return res.status(403).json({ error: 'Google sign-in is not enabled' });
+    }
+    if (!settings.google_client_id) {
+      return res.status(500).json({ error: 'Google Client ID is not configured' });
+    }
+
+    // Verify the Google ID token
+    const client = new OAuth2Client(settings.google_client_id);
+    const ticket = await client.verifyIdToken({
+      idToken: credential,
+      audience: settings.google_client_id,
+    });
+    const payload = ticket.getPayload();
+    const { sub: googleId, email, given_name: firstName, family_name: lastName } = payload;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Google account has no email address' });
+    }
+
+    // Find or create user
+    let user;
+    const byGoogleId = await query('SELECT * FROM users WHERE google_id = $1', [googleId]);
+    if (byGoogleId.rows.length > 0) {
+      user = byGoogleId.rows[0];
+    } else {
+      const byEmail = await query('SELECT * FROM users WHERE email = $1', [email]);
+      if (byEmail.rows.length > 0) {
+        // Link Google ID to existing email account
+        await query('UPDATE users SET google_id = $1, updated_at = NOW() WHERE id = $2', [googleId, byEmail.rows[0].id]);
+        user = { ...byEmail.rows[0], google_id: googleId };
+      } else {
+        // Create new user from Google account
+        const result = await query(
+          `INSERT INTO users (email, google_id, first_name, last_name, email_verified, is_active)
+           VALUES ($1, $2, $3, $4, true, true)
+           RETURNING *`,
+          [email, googleId, firstName || email.split('@')[0], lastName || '']
+        );
+        user = result.rows[0];
+      }
+    }
+
+    if (!user.is_active) {
+      return res.status(401).json({ error: 'Account is deactivated' });
+    }
+
+    const token = generateToken(user.id);
+
+    res.json({
+      message: 'Google sign-in successful',
+      user: {
+        id: user.id,
+        email: user.email,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        role: user.role,
+      },
+      token,
+    });
+
+  } catch (error) {
+    console.error('Google auth error:', error);
+    res.status(401).json({ error: 'Google sign-in failed. Invalid or expired credential.' });
+  }
 });
 
 module.exports = router;

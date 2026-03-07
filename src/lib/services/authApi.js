@@ -109,7 +109,27 @@ export const authApi = {
   getStoredUser() {
     const userStr = localStorage.getItem('user');
     return userStr ? JSON.parse(userStr) : null;
-  }
+  },
+
+  // Get Google OAuth config (public endpoint - no auth needed)
+  async getGoogleConfig() {
+    try {
+      return await api.get('/auth/google-config');
+    } catch (error) {
+      return { enabled: false, clientId: null };
+    }
+  },
+
+  // Sign in / sign up with Google credential
+  async googleAuth(credential) {
+    try {
+      const response = await api.post('/auth/google', { credential });
+      return response;
+    } catch (error) {
+      console.error('Google auth error:', error);
+      throw error;
+    }
+  },
 };
 
 export default authApi;

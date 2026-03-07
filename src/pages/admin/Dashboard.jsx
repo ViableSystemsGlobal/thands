@@ -23,6 +23,8 @@ import RecentOrders from "@/components/admin/dashboard/RecentOrders";
 import RecentActivity from "@/components/admin/dashboard/RecentActivity";
 import VisitorAnalytics from "@/components/admin/dashboard/VisitorAnalytics";
 import DashboardHeader from "@/components/admin/dashboard/DashboardHeader";
+import TopProducts from "@/components/admin/dashboard/TopProducts";
+import OrderStatusChart from "@/components/admin/dashboard/OrderStatusChart";
 import OrderDetailsDialog from "@/components/admin/OrderDetailsDialog";
 import { getDateFilterRange, calculateMonthlySales } from "@/lib/dashboardUtils";
 
@@ -50,6 +52,7 @@ const DashboardContent = () => {
   });
   const [recentOrdersData, setRecentOrdersData] = useState([]);
   const [recentActivityData, setRecentActivityData] = useState([]);
+  const [topProductsData, setTopProductsData] = useState([]);
   const [salesChartData, setSalesChartData] = useState({
     labels: [],
     datasets: [{
@@ -94,10 +97,9 @@ const DashboardContent = () => {
       
       setStats(data.stats || {});
       setRecentOrdersData(data.recentOrders || []);
+      setTopProductsData(data.topProducts || []);
       setSalesChartData(data.salesChartData || { labels: [], datasets: [] });
-      
-      // For now, just use orders as recent activity (consultations can be added later)
-      // Limit to 5 items
+
       const activity = (data.recentOrders || []).slice(0, 5).map(o => ({ ...o, type: 'order' }));
       setRecentActivityData(activity);
 
@@ -229,20 +231,39 @@ const DashboardContent = () => {
           </motion.div>
         </div>
 
-        {/* Visitor Analytics and Recent Activity - Side by Side */}
+        {/* Order Status + Top Products */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.4 }}
           >
-            <VisitorAnalytics stats={stats} loading={loading} />
+            <OrderStatusChart breakdown={stats?.orderStatusBreakdown || []} loading={loading} />
           </motion.div>
-          
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.45 }}
+          >
+            <TopProducts products={topProductsData} loading={loading} />
+          </motion.div>
+        </div>
+
+        {/* Visitor Analytics and Recent Activity */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.5 }}
+          >
+            <VisitorAnalytics stats={stats} loading={loading} />
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.55 }}
           >
             <RecentActivity activities={recentActivityData} loading={loading} />
           </motion.div>

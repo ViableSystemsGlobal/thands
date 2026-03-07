@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/components/ui/use-toast";
-import { getOrders, updateOrderStatus } from "@/lib/services/adminApi";
+import { getOrders, updateOrderStatus, bulkUpdateOrderStatus, bulkDeleteOrders } from "@/lib/services/adminApi";
 import OrderMetrics from "@/components/admin/orders/OrderMetrics";
 import OrderTable from "@/components/admin/orders/OrderTable";
 import OrderFilters from "@/components/admin/orders/OrderFilters";
+import CreateOrderDialog from "@/components/admin/orders/CreateOrderDialog";
 import { useCurrency } from "@/context/CurrencyContext";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus, Trash2, CheckSquare } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const ITEMS_PER_PAGE_OPTIONS = [10, 20, 50, 100];
 
@@ -14,6 +16,10 @@ const OrdersContent = () => {
   const { exchangeRate, loadingRate } = useCurrency();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [selectedOrderIds, setSelectedOrderIds] = useState([]);
+  const [bulkStatusValue, setBulkStatusValue] = useState('');
+  const [bulkLoading, setBulkLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentTab, setCurrentTab] = useState("all");
   const [dateRange, setDateRange] = useState("month"); 
@@ -176,7 +182,8 @@ const OrdersContent = () => {
   }, [fetchOrders]);
   
   useEffect(() => {
-    setCurrentPage(1); // Reset to first page when filters change
+    setCurrentPage(1);
+    setSelectedOrderIds([]);
   }, [searchQuery, currentTab, dateRange]);
 
 
@@ -220,12 +227,56 @@ const OrdersContent = () => {
   const totalPages = Math.ceil(totalOrdersCount / itemsPerPage);
 
   const handleDeleteOrder = async (orderId) => {
-    // TODO: Implement order deletion when API endpoint is available
     toast({
       title: "Feature Not Available",
-      description: "Order deletion is not yet implemented in the new API.",
+      description: "Use bulk selection to delete orders.",
       variant: "destructive",
     });
+  };
+
+  const handleBulkStatusUpdate = async () => {
+    if (!bulkStatusValue || selectedOrderIds.length === 0) return;
+    setBulkLoading(true);
+    try {
+      const isPaymentStatus = ['paid', 'pending', 'failed'].includes(bulkStatusValue);
+      await bulkUpdateOrderStatus(
+        selectedOrderIds,
+        isPaymentStatus ? undefined : bulkStatusValue,
+        isPaymentStatus ? bulkStatusValue : undefined
+      );
+      toast({
+        title: 'Success',
+        description: `Updated ${selectedOrderIds.length} order(s) to "${bulkStatusValue}".`,
+        variant: 'success',
+      });
+      setSelectedOrderIds([]);
+      setBulkStatusValue('');
+      fetchOrders();
+    } catch (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedOrderIds.length === 0) return;
+    if (!window.confirm(`Permanently delete ${selectedOrderIds.length} order(s)? This cannot be undone.`)) return;
+    setBulkLoading(true);
+    try {
+      await bulkDeleteOrders(selectedOrderIds);
+      toast({
+        title: 'Deleted',
+        description: `${selectedOrderIds.length} order(s) deleted.`,
+        variant: 'success',
+      });
+      setSelectedOrderIds([]);
+      fetchOrders();
+    } catch (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } finally {
+      setBulkLoading(false);
+    }
   };
 
   if (loading && orders.length === 0 && currentPage === 1) { 
@@ -238,6 +289,15 @@ const OrdersContent = () => {
 
   return (
       <div className="p-4 md:p-8 bg-gradient-to-br from-slate-50 to-gray-100 min-h-screen">
+        <div className="flex justify-end mb-4">
+          <Button
+            onClick={() => setIsCreateDialogOpen(true)}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Create Order
+          </Button>
+        </div>
         <OrderFilters
           currentTab={currentTab}
           onTabChange={setCurrentTab}
@@ -247,11 +307,70 @@ const OrdersContent = () => {
           onDateRangeChange={setDateRange}
         />
         <OrderMetrics metrics={metrics} loading={loading && orders.length > 0 && currentPage === 1} />
-        <div className="bg-white rounded-xl shadow-xl border border-gray-200 mt-8">
+        {/* Bulk actions bar */}
+        {selectedOrderIds.length > 0 && (
+          <div className="flex items-center gap-3 mt-6 px-4 py-3 bg-indigo-50 border border-indigo-200 rounded-xl">
+            <CheckSquare className="h-4 w-4 text-indigo-600 shrink-0" />
+            <span className="text-sm font-medium text-indigo-800">
+              {selectedOrderIds.length} order{selectedOrderIds.length > 1 ? 's' : ''} selected
+            </span>
+            <div className="flex items-center gap-2 ml-2">
+              <select
+                className="border border-slate-300 rounded-md px-2 py-1.5 text-sm bg-white"
+                value={bulkStatusValue}
+                onChange={(e) => setBulkStatusValue(e.target.value)}
+              >
+                <option value="">Change status…</option>
+                <optgroup label="Order Status">
+                  <option value="pending">Pending</option>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="processing">Processing</option>
+                  <option value="shipped">Shipped</option>
+                  <option value="delivered">Delivered</option>
+                  <option value="cancelled">Cancelled</option>
+                </optgroup>
+                <optgroup label="Payment Status">
+                  <option value="paid">Paid</option>
+                  <option value="pending">Unpaid (pending)</option>
+                  <option value="failed">Failed</option>
+                </optgroup>
+              </select>
+              <Button
+                size="sm"
+                disabled={!bulkStatusValue || bulkLoading}
+                onClick={handleBulkStatusUpdate}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white"
+              >
+                {bulkLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Apply'}
+              </Button>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={bulkLoading}
+              onClick={handleBulkDelete}
+              className="ml-auto border-red-300 text-red-600 hover:bg-red-50"
+            >
+              <Trash2 className="h-3.5 w-3.5 mr-1" />
+              Delete Selected
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setSelectedOrderIds([])}
+              className="text-slate-500"
+            >
+              Clear
+            </Button>
+          </div>
+        )}
+
+        <div className="bg-white rounded-xl shadow-xl border border-gray-200 mt-4">
           <OrderTable
             orders={orders}
             onUpdateStatus={handleUpdateOrderStatus}
             onDelete={handleDeleteOrder}
+            onSelectionChange={setSelectedOrderIds}
             loading={loading}
             initialLoading={loading && orders.length === 0 && currentPage === 1}
             currentPage={currentPage}
@@ -262,6 +381,11 @@ const OrdersContent = () => {
             onItemsPerPageChange={handleItemsPerPageChange}
           />
         </div>
+        <CreateOrderDialog
+          open={isCreateDialogOpen}
+          onOpenChange={setIsCreateDialogOpen}
+          onSave={fetchOrders}
+        />
       </div>
   );
 };

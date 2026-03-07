@@ -1,11 +1,4 @@
-import OpenAI from 'openai';
 import { supabase } from './supabase';
-
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: import.meta.env.VITE_OPENAI_API_KEY,
-  dangerouslyAllowBrowser: true // Only for development, in production use edge functions
-});
 
 // Get knowledge base content for context
 export async function getKnowledgeBaseContext() {
@@ -133,55 +126,6 @@ export async function getChatHistory(sessionId) {
   } catch (error) {
     console.error('Error fetching chat history:', error);
     return [];
-  }
-}
-
-// Generate AI response
-export async function generateAIResponse(message, chatHistory = [], knowledgeBase = '') {
-  try {
-    // Build conversation context
-    const messages = [
-      {
-        role: 'system',
-        content: `You are a helpful customer service assistant for Tailored Hands, a bespoke fashion and tailoring business. Use the following knowledge base to answer questions accurately. If you don't know something from the knowledge base, politely say so and offer to help with what you do know.
-
-Knowledge Base:
-${knowledgeBase}
-
-Instructions:
-- Be friendly, professional, and helpful
-- Focus on fashion, tailoring, orders, and customer service topics
-- If asked about technical issues, direct them to contact support
-- Keep responses concise but informative
-- Don't make up information not in the knowledge base`
-      }
-    ];
-
-    // Add chat history
-    chatHistory.forEach(msg => {
-      messages.push({
-        role: msg.sender_type === 'user' ? 'user' : 'assistant',
-        content: msg.message
-      });
-    });
-
-    // Add current message
-    messages.push({
-      role: 'user',
-      content: message
-    });
-
-    const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
-      messages: messages,
-      max_tokens: 500,
-      temperature: 0.7
-    });
-
-    return response.choices[0].message.content;
-  } catch (error) {
-    console.error('Error generating AI response:', error);
-    return 'I apologize, but I\'m having trouble processing your request right now. Please try again later or contact our support team directly.';
   }
 }
 

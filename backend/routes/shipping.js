@@ -53,12 +53,12 @@ router.get('/active', async (req, res) => {
  */
 async function calculateParcelFromItems(items) {
   try {
-    // Default dimensions for clothing items (weight = 1 kg in lb)
+    // Default dimensions for clothing items — weights in kg, dimensions in inches
     const defaultDimensions = {
       length: 12, // inches
       width: 10,
       height: 2,
-      weight: 2.205, // lb (1 kg)
+      weight: 1, // kg
     };
 
     let totalWeight = 0;
@@ -83,7 +83,8 @@ async function calculateParcelFromItems(items) {
           length = product.dimensions_length ?? product.length ?? defaultDimensions.length;
           width = product.dimensions_width ?? product.width ?? defaultDimensions.width;
           height = product.dimensions_height ?? product.height ?? defaultDimensions.height;
-          weight = product.weight ?? defaultDimensions.weight;
+          // product.weight is stored in kg
+          weight = product.weight != null ? parseFloat(product.weight) : defaultDimensions.weight;
         }
       }
 
@@ -94,12 +95,12 @@ async function calculateParcelFromItems(items) {
     }
 
     return {
-      length: Math.max(maxLength, 6).toString(),   // minimum 6 inches
-      width: Math.max(maxWidth, 4).toString(),     // minimum 4 inches
-      height: Math.max(totalHeight, 1).toString(), // minimum 1 inch (stacked)
+      length: Math.max(maxLength, 6).toString(),
+      width: Math.max(maxWidth, 4).toString(),
+      height: Math.max(totalHeight, 1).toString(),
       weight: Math.max(totalWeight, 0.1).toString(),
       distance_unit: 'in',
-      mass_unit: 'lb'
+      mass_unit: 'kg', // product.weight is in kg
     };
   } catch (error) {
     console.error('Error calculating parcel from items:', error);
@@ -107,9 +108,9 @@ async function calculateParcelFromItems(items) {
       length: '12',
       width: '10',
       height: '2',
-      weight: '2.205', // 1 kg in lb
+      weight: '1', // 1 kg
       distance_unit: 'in',
-      mass_unit: 'lb'
+      mass_unit: 'kg'
     };
   }
 }
@@ -562,6 +563,53 @@ router.post('/label', authenticateToken, async (req, res) => {
       return cleaned.startsWith('+') ? cleaned : '+' + cleaned;
     };
 
+    // Build export declaration line items (required for invoice document; used for domestic and international)
+    // DHL expects commodityCodes as array of { typeCode, value }, not commodityCode
+    const hsCode = (code) => (code && String(code).trim()) ? String(code).trim().substring(0, 12) : '621132';
+    const HS_DESCRIPTIONS = {
+      '621132': "Men's garments, cotton",
+      '621142': "Women's garments, cotton",
+      '620312': "Men's suits, cotton",
+      '620319': "Men's suits, other materials",
+    };
+    const itemDescription = (name, code) => {
+      const desc = HS_DESCRIPTIONS[code];
+      const base = name || 'Clothing';
+      return desc ? `${base} (${desc})`.substring(0, 50) : base.substring(0, 50);
+    };
+    const lineItems = itemsResult.rows.length > 0
+      ? itemsResult.rows.map((item, idx) => ({
+          number: idx + 1,
+          description: itemDescription(item.name, hsCode(item.hs_code)),
+          price: parseFloat(item.price) || (declaredValue / (itemsResult.rows.length || 1)),
+          priceCurrency: declaredCurrency,
+          quantity: { value: item.quantity || 1, unitOfMeasurement: 'PCS' },
+          weight: {
+            netValue:   Math.max(0.1, parseFloat(item.weight) || 0.5),
+            grossValue: Math.max(0.1, parseFloat(item.weight) || 0.5),
+          },
+          commodityCodes: [
+            { typeCode: 'outbound', value: hsCode(item.hs_code) },
+            { typeCode: 'inbound', value: hsCode(item.hs_code) },
+          ],
+          exportReasonType: 'permanent',
+          manufacturerCountry: fromCountry,
+        }))
+      : [{
+          number: 1,
+          description: 'Clothing and apparel',
+          price: declaredValue,
+          priceCurrency: declaredCurrency,
+          quantity: { value: 1, unitOfMeasurement: 'PCS' },
+          weight: { netValue: Math.max(0.1, weightKg), grossValue: Math.max(0.1, weightKg) },
+          commodityCodes: [
+            { typeCode: 'outbound', value: '621132' },
+            { typeCode: 'inbound', value: '621132' },
+          ],
+          exportReasonType: 'permanent',
+          manufacturerCountry: fromCountry,
+        }];
+
     // Build content block
     const contentBlock = {
       packages: [{
@@ -575,43 +623,11 @@ router.post('/label', authenticateToken, async (req, res) => {
       isCustomsDeclarable: !isDomestic,
       description: 'Clothing and apparel',
       unitOfMeasurement: 'metric',
-    };
-
-    // Add customs fields for international shipments
-    if (!isDomestic) {
-      contentBlock.incoterm = 'DAP';
-      contentBlock.declaredValue = declaredValue;
-      contentBlock.declaredValueCurrency = declaredCurrency;
-
-      // Build export declaration line items from order items
-      const lineItems = itemsResult.rows.length > 0
-        ? itemsResult.rows.map((item, idx) => ({
-            number: idx + 1,
-            description: (item.name || 'Clothing').substring(0, 50),
-            price: parseFloat(item.price) || (declaredValue / (itemsResult.rows.length || 1)),
-            priceCurrency: declaredCurrency,
-            quantity: { value: item.quantity || 1, unitOfMeasurement: 'PCS' },
-            weight: {
-              netValue:   Math.max(0.1, parseFloat(item.weight) || 0.5),
-              grossValue: Math.max(0.1, parseFloat(item.weight) || 0.5),
-            },
-            commodityCode: item.hs_code || '621132',
-            exportReasonType: 'permanent',
-            manufacturerCountry: fromCountry,
-          }))
-        : [{
-            number: 1,
-            description: 'Clothing and apparel',
-            price: declaredValue,
-            priceCurrency: declaredCurrency,
-            quantity: { value: 1, unitOfMeasurement: 'PCS' },
-            weight: { netValue: Math.max(0.1, weightKg), grossValue: Math.max(0.1, weightKg) },
-            commodityCode: '621132',
-            exportReasonType: 'permanent',
-            manufacturerCountry: fromCountry,
-          }];
-
-      contentBlock.exportDeclaration = {
+      // declaredValue/declaredValueCurrency required by DHL whenever exportDeclaration is present
+      declaredValue,
+      declaredValueCurrency: declaredCurrency,
+      // Required when requesting invoice document (label + waybill + invoice for both domestic and international)
+      exportDeclaration: {
         lineItems,
         invoice: {
           date: invoiceDate,
@@ -619,7 +635,13 @@ router.post('/label', authenticateToken, async (req, res) => {
         },
         exportReason: 'PERMANENT',
         exportReasonType: 'permanent',
-      };
+        placeOfIncoterm: order.shipping_city || '',
+      },
+    };
+
+    // Add customs-specific fields for international shipments
+    if (!isDomestic) {
+      contentBlock.incoterm = 'DAP';
     }
 
     const shipmentBody = {
@@ -658,6 +680,26 @@ router.post('/label', authenticateToken, async (req, res) => {
         },
       },
       content: contentBlock,
+      outputImageProperties: {
+        allDocumentsInOneImage: true,
+        encodingFormat: 'pdf',
+        imageOptions: [
+          { templateName: 'ECOM26_84_A4_001', typeCode: 'label' },
+          {
+            templateName: 'ARCH_8X4_A4_002',
+            isRequested: true,
+            hideAccountNumber: true,
+            typeCode: 'waybillDoc',
+          },
+          ...(!isDomestic ? [{
+            templateName: 'COMMERCIAL_INVOICE_P_10',
+            invoiceType: 'commercial',
+            languageCode: 'eng',
+            isRequested: true,
+            typeCode: 'invoice',
+          }] : []),
+        ],
+      },
     };
 
     console.log('📤 DHL shipment body:', JSON.stringify(shipmentBody, null, 2));
@@ -958,7 +1000,7 @@ async function calculateParcelDimensions(orderId) {
       WHERE oi.order_id = $1
     `, [orderId]);
 
-    const defaultLength = 10, defaultWidth = 10, defaultHeight = 5, defaultWeight = 2.205; // 1 kg in lb
+    const defaultLength = 12, defaultWidth = 10, defaultHeight = 2, defaultWeight = 1; // 1 kg — matches calculateParcelFromItems defaults
     let totalWeight = 0;
     let maxLength = 0, maxWidth = 0;
     let totalHeight = 0;
@@ -983,7 +1025,7 @@ async function calculateParcelDimensions(orderId) {
     if (maxLength === 0) maxLength = defaultLength;
     if (maxWidth === 0) maxWidth = defaultWidth;
     if (totalHeight === 0) totalHeight = defaultHeight;
-    if (totalWeight === 0) totalWeight = defaultWeight; // 1 kg in lb
+    if (totalWeight === 0) totalWeight = defaultWeight; // 1 kg
 
     return {
       length: maxLength.toString(),
@@ -991,7 +1033,7 @@ async function calculateParcelDimensions(orderId) {
       height: Math.max(totalHeight, 1).toString(),
       distance_unit: "in",
       weight: totalWeight.toString(),
-      mass_unit: "lb"
+      mass_unit: "kg"
     };
   } catch (error) {
     console.error('❌ Parcel calculation error:', error);
@@ -1000,8 +1042,8 @@ async function calculateParcelDimensions(orderId) {
       width: "10",
       height: "5",
       distance_unit: "in",
-      weight: "2.205", // 1 kg in lb
-      mass_unit: "lb"
+      weight: "1", // 1 kg
+      mass_unit: "kg"
     };
   }
 }
