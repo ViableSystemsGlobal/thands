@@ -1,11 +1,39 @@
 const express = require('express');
+const crypto = require('crypto');
 const { query } = require('../config/database');
+const { authenticateToken } = require('../middleware/auth');
 const router = express.Router();
 
 // Paystack webhook handler
 router.post('/webhook/paystack', async (req, res) => {
   try {
-    console.log('💰 Paystack Webhook Received:', req.body);
+    // Verify Paystack webhook signature
+    const signature = req.headers['x-paystack-signature'];
+    const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
+
+    if (!paystackSecret) {
+      console.error('❌ PAYSTACK_SECRET_KEY not configured — cannot verify webhook');
+      return res.status(500).json({ error: 'Webhook verification not configured' });
+    }
+
+    if (!signature) {
+      console.error('❌ Missing x-paystack-signature header');
+      return res.status(401).json({ error: 'Missing webhook signature' });
+    }
+
+    // Compute expected HMAC-SHA512 signature
+    const rawBody = JSON.stringify(req.body);
+    const expectedSignature = crypto
+      .createHmac('sha512', paystackSecret)
+      .update(rawBody)
+      .digest('hex');
+
+    if (signature !== expectedSignature) {
+      console.error('❌ Invalid Paystack webhook signature');
+      return res.status(401).json({ error: 'Invalid webhook signature' });
+    }
+
+    console.log('💰 Paystack Webhook Received (verified):', req.body);
 
     const { event, data } = req.body;
 
@@ -131,8 +159,12 @@ router.post('/webhook/paystack', async (req, res) => {
   }
 });
 
-// Manual payment confirmation endpoint (for testing)
-router.post('/confirm/:orderId', async (req, res) => {
+// Manual payment confirmation endpoint (admin only)
+router.post('/confirm/:orderId', authenticateToken, async (req, res) => {
+  const adminRoles = ['super_admin', 'admin', 'manager'];
+  if (!adminRoles.includes(req.user?.role)) {
+    return res.status(403).json({ error: 'Admin access required' });
+  }
   try {
     const { orderId } = req.params;
     const { paymentReference, amount } = req.body;

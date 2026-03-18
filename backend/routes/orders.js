@@ -560,23 +560,16 @@ router.get('/track/:orderNumber', async (req, res) => {
   }
 });
 
-// Get order by order number (public endpoint)
+// Get order by order number (public endpoint — PII stripped)
 router.get('/by-number/:orderNumber', async (req, res) => {
   try {
     const { orderNumber } = req.params;
-    
+
     const result = await query(`
-      SELECT 
+      SELECT
         o.*,
         c.first_name,
-        c.last_name,
-        c.email as customer_email,
-        c.phone as customer_phone,
-        c.address as customer_address,
-        c.city as customer_city,
-        c.state as customer_state,
-        c.country as customer_country,
-        c.postal_code as customer_postal_code
+        c.last_name
       FROM orders o
       LEFT JOIN customers c ON o.customer_id = c.id
       WHERE o.order_number = $1
@@ -606,9 +599,7 @@ router.get('/by-number/:orderNumber', async (req, res) => {
       ...order,
       customers: {
         first_name: order.first_name,
-        last_name: order.last_name,
-        email: order.email,
-        phone: order.phone
+        last_name: order.last_name
       },
       order_items: itemsResult.rows.map(item => ({
         ...item,

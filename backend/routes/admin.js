@@ -207,11 +207,22 @@ router.get('/dashboard', async (req, res) => {
   }
 });
 
-// Get all settings
-router.get('/settings', async (req, res) => {
+// Secret fields that must never be returned to any client
+const SETTINGS_SECRET_FIELDS = ['paystack_secret_key', 'google_places_api_key', 'smtp_password', 'recaptcha_secret_key'];
+
+function stripSecrets(settings) {
+  const safe = { ...settings };
+  for (const field of SETTINGS_SECRET_FIELDS) {
+    delete safe[field];
+  }
+  return safe;
+}
+
+// Get all settings (authenticated — secrets stripped from response)
+router.get('/settings', authenticateToken, async (req, res) => {
   try {
     const result = await query('SELECT * FROM settings LIMIT 1');
-    
+
     if (result.rows.length === 0) {
       // Return default settings if none exist
       const defaultSettings = {
@@ -225,7 +236,7 @@ router.get('/settings', async (req, res) => {
         hero_subtitle: 'Discover our collection of meticulously crafted African-inspired pieces that blend traditional aesthetics with contemporary design.',
         hero_button_text: 'EXPLORE COLLECTION'
       };
-      
+
       return res.json({
         success: true,
         settings: defaultSettings
@@ -234,7 +245,7 @@ router.get('/settings', async (req, res) => {
 
     res.json({
       success: true,
-      settings: result.rows[0]
+      settings: stripSecrets(result.rows[0])
     });
 
   } catch (error) {
