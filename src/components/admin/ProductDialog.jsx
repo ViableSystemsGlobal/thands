@@ -249,7 +249,7 @@ const ProductDialog = ({ isOpen, onClose, product, onSuccess }) => {
       } else {
         const response = await createProduct(productData);
         if (!response.success) throw new Error(response.error || 'Failed to create product');
-        productId = response.data.id;
+        productId = response.data?.product?.id || response.data?.id;
       }
 
       // Handle sizes
