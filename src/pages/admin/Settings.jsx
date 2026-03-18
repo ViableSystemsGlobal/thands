@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/components/ui/use-toast';
 import adminApiClient from '@/lib/services/adminApiClient';
+import { API_BASE_URL } from '@/lib/services/api';
 import adminSettingsApi from '@/lib/services/adminSettingsApi';
 import { loadExchangeRateFromSettings, forceRefreshExchangeRate, refreshAllPrices } from '@/lib/services/exchangeRate';
 import { uploadHeroImage, uploadCollectionImage, deleteImage } from '@/lib/services/uploadApi';
@@ -125,9 +126,8 @@ const SettingsNew = () => {
   const handleDownloadBackup = async () => {
     setDownloadingBackup(true);
     try {
-      const token = localStorage.getItem('adminToken');
-      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3003/api';
-      const response = await fetch(`${apiBase}/admin/backup/download`, {
+      const token = localStorage.getItem('admin_auth_token');
+      const response = await fetch(`${API_BASE_URL}/admin/backup/download`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!response.ok) {
@@ -157,11 +157,10 @@ const SettingsNew = () => {
     if (!window.confirm('⚠️ This will overwrite your current database. Are you sure?')) return;
     setRestoringBackup(true);
     try {
-      const token = localStorage.getItem('adminToken');
-      const apiBase = import.meta.env.VITE_API_URL || 'http://localhost:3003/api';
+      const token = localStorage.getItem('admin_auth_token');
       const formData = new FormData();
       formData.append('backup', restoreFile);
-      const response = await fetch(`${apiBase}/admin/backup/restore`, {
+      const response = await fetch(`${API_BASE_URL}/admin/backup/restore`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
