@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { query } = require('../config/database');
 const adminBranchFilter = require('../middleware/adminBranchFilter');
+const { authenticateToken } = require('../middleware/auth');
 
 // Helper function to build branch filter SQL (returns condition and value)
 function buildBranchFilter(branchFilter, tableAlias = '') {
