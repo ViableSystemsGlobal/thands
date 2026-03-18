@@ -1,6 +1,6 @@
 databases:
   - name: tailoredhands-db
-    plan: starter
+    plan: basic-256mb
     databaseName: tailoredhands
     user: tailoredhands
 
