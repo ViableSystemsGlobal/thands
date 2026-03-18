@@ -3,7 +3,7 @@ const { body, validationResult } = require('express-validator');
 const { authenticateToken } = require('../middleware/auth');
 const { requireBranchAccess } = require('../middleware/branchAccess');
 const adminBranchFilter = require('../middleware/adminBranchFilter');
-const { query } = require('../config/database');
+const { query, transaction } = require('../config/database');
 const router = express.Router();
 
 // Get all orders with optional filtering (Admin only)
@@ -118,21 +118,26 @@ router.get('/', authenticateToken, requireBranchAccess, adminBranchFilter, async
     params.push(parseInt(limit), offset);
     
     const ordersResult = await query(dataQuery, params);
-    
-    // Get order items for each order
-    const orders = [];
-    for (const order of ordersResult.rows) {
+
+    // Batch-fetch all items for the returned orders in a single query (avoids N+1)
+    const orders = ordersResult.rows;
+    if (orders.length > 0) {
+      const orderIds = orders.map(o => o.id);
+      const placeholders = orderIds.map((_, i) => `$${i + 1}`).join(',');
       const itemsResult = await query(`
         SELECT oi.*, p.name as product_name, p.image_url as product_image
         FROM order_items oi
         LEFT JOIN products p ON oi.product_id = p.id
-        WHERE oi.order_id = $1
-      `, [order.id]);
-      
-      orders.push({
-        ...order,
-        items: itemsResult.rows
-      });
+        WHERE oi.order_id IN (${placeholders})
+      `, orderIds);
+      const itemsByOrder = {};
+      for (const item of itemsResult.rows) {
+        if (!itemsByOrder[item.order_id]) itemsByOrder[item.order_id] = [];
+        itemsByOrder[item.order_id].push(item);
+      }
+      for (const order of orders) {
+        order.items = itemsByOrder[order.id] || [];
+      }
     }
 
     res.json({
@@ -205,66 +210,66 @@ router.post('/', [
     // Get branch code from context (set by branchContext middleware)
     const branchCode = req.branchCode || 'GH';
 
-    // Create the order
-    const orderResult = await query(
-      `INSERT INTO orders (
-        order_number, customer_id, user_id, status, payment_status, payment_method, payment_reference,
-        base_subtotal, base_shipping, base_tax, base_total, total_amount_ghs, exchange_rate,
-        shipping_email, shipping_phone, shipping_first_name, shipping_last_name, shipping_address,
-        shipping_city, shipping_state, shipping_postal_code, shipping_country,
-        billing_email, billing_first_name, billing_last_name, billing_address,
-        billing_city, billing_state, billing_postal_code, billing_country,
-        voucher_code, voucher_discount, notes, branch_code
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34)
-      RETURNING *`,
-      [
-        order_number, customer_id, user_id, status, payment_status, payment_method, payment_reference,
-        base_subtotal, base_shipping, base_tax, base_total, total_amount_ghs, exchange_rate,
-        shipping_email, shipping_phone, shipping_first_name, shipping_last_name, shipping_address,
-        shipping_city, shipping_state, shipping_postal_code, shipping_country,
-        billing_email, billing_first_name, billing_last_name, billing_address,
-        billing_city, billing_state, billing_postal_code, billing_country,
-        voucher_code, voucher_discount, notes, branchCode
-      ]
-    );
+    // Create order + items atomically so a failed item insert never leaves an orphaned order
+    const order = await transaction(async (client) => {
+      const orderResult = await client.query(
+        `INSERT INTO orders (
+          order_number, customer_id, user_id, status, payment_status, payment_method, payment_reference,
+          base_subtotal, base_shipping, base_tax, base_total, total_amount_ghs, exchange_rate,
+          shipping_email, shipping_phone, shipping_first_name, shipping_last_name, shipping_address,
+          shipping_city, shipping_state, shipping_postal_code, shipping_country,
+          billing_email, billing_first_name, billing_last_name, billing_address,
+          billing_city, billing_state, billing_postal_code, billing_country,
+          voucher_code, voucher_discount, notes, branch_code
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34)
+        RETURNING *`,
+        [
+          order_number, customer_id, user_id, status, payment_status, payment_method, payment_reference,
+          base_subtotal, base_shipping, base_tax, base_total, total_amount_ghs, exchange_rate,
+          shipping_email, shipping_phone, shipping_first_name, shipping_last_name, shipping_address,
+          shipping_city, shipping_state, shipping_postal_code, shipping_country,
+          billing_email, billing_first_name, billing_last_name, billing_address,
+          billing_city, billing_state, billing_postal_code, billing_country,
+          voucher_code, voucher_discount, notes, branchCode
+        ]
+      );
 
-    const order = orderResult.rows[0];
+      const newOrder = orderResult.rows[0];
 
-    // Create order items
-    if (items && items.length > 0) {
-      for (const item of items) {
-        const hasProductId = item.product_id && item.product_id.trim() !== '';
-        const hasGiftVoucherId = item.gift_voucher_type_id && item.gift_voucher_type_id.trim() !== '';
-        const hasCustomName = item.custom_item_name && item.custom_item_name.trim() !== '';
+      if (items && items.length > 0) {
+        for (const item of items) {
+          const hasProductId = item.product_id && item.product_id.trim() !== '';
+          const hasGiftVoucherId = item.gift_voucher_type_id && item.gift_voucher_type_id.trim() !== '';
+          const hasCustomName = item.custom_item_name && item.custom_item_name.trim() !== '';
 
-        if (!hasProductId && !hasGiftVoucherId && !hasCustomName) {
-          console.error('Order item missing product_id, gift_voucher_type_id, and custom_item_name:', item);
-          throw new Error('Order item must have a product, gift voucher, or custom item name');
+          if (!hasProductId && !hasGiftVoucherId && !hasCustomName) {
+            throw new Error('Order item must have a product, gift voucher, or custom item name');
+          }
+          if (hasProductId && hasGiftVoucherId) {
+            throw new Error('Order item cannot have both product_id and gift_voucher_type_id');
+          }
+
+          await client.query(
+            `INSERT INTO order_items (order_id, product_id, gift_voucher_type_id, quantity, size, price, custom_item_name)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+              newOrder.id,
+              hasProductId ? item.product_id : null,
+              hasGiftVoucherId ? item.gift_voucher_type_id : null,
+              item.quantity,
+              item.size || null,
+              item.price,
+              hasCustomName ? item.custom_item_name : null
+            ]
+          );
         }
-
-        if (hasProductId && hasGiftVoucherId) {
-          console.error('Order item has both product_id and gift_voucher_type_id:', item);
-          throw new Error('Order item cannot have both product_id and gift_voucher_type_id');
-        }
-
-        await query(
-          `INSERT INTO order_items (order_id, product_id, gift_voucher_type_id, quantity, size, price, custom_item_name)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [
-            order.id,
-            hasProductId ? item.product_id : null,
-            hasGiftVoucherId ? item.gift_voucher_type_id : null,
-            item.quantity,
-            item.size || null,
-            item.price,
-            hasCustomName ? item.custom_item_name : null
-          ]
-        );
       }
-    }
+
+      return newOrder;
+    });
 
     // Note: Order confirmation notification removed - will be sent after payment success
-    
+
     // Send admin notification if order is created with payment_status = 'paid'
     if (payment_status === 'paid') {
       try {

@@ -124,7 +124,7 @@ export async function verifyRecaptchaWithDevMode(token, remoteip = null) {
 
   // In non-production environments, allow bypass only when explicitly configured
   const isDevelopment = import.meta.env.MODE === 'development';
-  const skipRecaptchaInDev = process.env.SKIP_RECAPTCHA_IN_DEV === 'true';
+  const skipRecaptchaInDev = import.meta.env.VITE_SKIP_RECAPTCHA_IN_DEV === 'true';
 
   if (isDevelopment && skipRecaptchaInDev) {
     console.warn('⚠️  reCAPTCHA verification skipped in development mode');

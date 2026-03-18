@@ -248,7 +248,7 @@ router.get('/settings', async (req, res) => {
 
 
 // PUT /api/admin/settings - Update settings
-router.put('/settings', async (req, res) => {
+router.put('/settings', authenticateToken, async (req, res) => {
     try {
       console.log('🔍 Received settings update request:', {
         paystack_public_key: req.body.paystack_public_key ? 'SET' : 'NOT SET',
@@ -455,7 +455,7 @@ router.put('/users/:id/password', async (req, res) => {
 });
 
 // PUT /api/admin/settings/google-places-api-key - Update only Google Places API key
-router.put('/settings/google-places-api-key', async (req, res) => {
+router.put('/settings/google-places-api-key', authenticateToken, async (req, res) => {
   try {
     const { google_places_api_key } = req.body;
     

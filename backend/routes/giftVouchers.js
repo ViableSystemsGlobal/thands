@@ -323,14 +323,14 @@ router.put('/:id/status', authenticateToken, [
 
     // Map status to is_redeemed field
     const isRedeemed = status === 'used';
-    const redeemedAt = status === 'used' ? 'NOW()' : 'NULL';
+    const redeemedAt = status === 'used' ? new Date() : null;
 
     const result = await query(
-      `UPDATE gift_vouchers 
-       SET is_redeemed = $1, redeemed_at = ${redeemedAt}, updated_at = NOW() 
-       WHERE id = $2 
+      `UPDATE gift_vouchers
+       SET is_redeemed = $1, redeemed_at = $2, updated_at = NOW()
+       WHERE id = $3
        RETURNING *`,
-      [isRedeemed, id]
+      [isRedeemed, redeemedAt, id]
     );
 
     if (result.rows.length === 0) {
