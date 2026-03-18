@@ -2,9 +2,7 @@
  * Main API client for making HTTP requests to the backend
  */
 
-export const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://your-domain.com/api'  // Update this for production
-  : 'http://localhost:3003/api';
+export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3003/api';
 
 /**
  * Default fetch options

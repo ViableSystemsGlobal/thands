@@ -304,8 +304,33 @@ router.post('/guest', [
   }
 });
 
+// GET /api/customers/search - Search customer by email (must be before /:id)
+router.get('/search', authenticateToken, async (req, res) => {
+  try {
+    const { email } = req.query;
+
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Email query parameter is required' });
+    }
+
+    const customerResult = await query(
+      'SELECT * FROM customers WHERE email = $1',
+      [email.toLowerCase()]
+    );
+
+    if (customerResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Customer not found' });
+    }
+
+    res.json({ success: true, data: customerResult.rows[0] });
+  } catch (error) {
+    console.error('Error searching for customer:', error);
+    res.status(500).json({ success: false, error: 'Failed to search for customer', details: error.message });
+  }
+});
+
 // PUT /api/customers/:id - Update customer
-router.put('/:id', [
+router.put('/:id', authenticateToken, [
   body('firstName').optional().isString(),
   body('lastName').optional().isString(),
   body('phone').optional().isString()
@@ -342,7 +367,7 @@ router.put('/:id', [
 });
 
 // GET /api/customers/:id - Get customer by ID
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticateToken, async (req, res) => {
   try {
     const customerResult = await query(
       'SELECT * FROM customers WHERE id = $1',
@@ -357,31 +382,6 @@ router.get('/:id', async (req, res) => {
   } catch (error) {
     console.error('Error getting customer:', error);
     res.status(500).json({ success: false, error: 'Failed to get customer', details: error.message });
-  }
-});
-
-// GET /api/customers/search - Search customer by email
-router.get('/search', async (req, res) => {
-  try {
-    const { email } = req.query;
-    
-    if (!email) {
-      return res.status(400).json({ success: false, error: 'Email query parameter is required' });
-    }
-
-    const customerResult = await query(
-      'SELECT * FROM customers WHERE email = $1',
-      [email.toLowerCase()]
-    );
-
-    if (customerResult.rows.length === 0) {
-      return res.status(404).json({ success: false, error: 'Customer not found' });
-    }
-
-    res.json({ success: true, data: customerResult.rows[0] });
-  } catch (error) {
-    console.error('Error searching for customer:', error);
-    res.status(500).json({ success: false, error: 'Failed to search for customer', details: error.message });
   }
 });
 

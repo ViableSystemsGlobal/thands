@@ -1,7 +1,10 @@
 const jwt = require('jsonwebtoken');
 const { query } = require('../config/database');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
+if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
+  throw new Error('JWT_SECRET environment variable is required in production');
+}
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-only-jwt-secret-not-for-production';
 
 // Middleware to verify JWT token
 const authenticateToken = async (req, res, next) => {
@@ -14,7 +17,7 @@ const authenticateToken = async (req, res, next) => {
     }
 
     // Verify the token
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
     
     // Get user from database
     const userResult = await query('SELECT id, email, full_name, role, is_active FROM users WHERE id = $1', [decoded.userId]);
@@ -66,7 +69,7 @@ const optionalAuth = async (req, res, next) => {
     const token = authHeader && authHeader.split(' ')[1];
 
     if (token) {
-      const decoded = jwt.verify(token, JWT_SECRET);
+      const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
       const userResult = await query('SELECT id, email, full_name, role, is_active FROM users WHERE id = $1', [decoded.userId]);
       
       if (userResult.rows.length > 0 && userResult.rows[0].is_active) {

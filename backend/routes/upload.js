@@ -1,6 +1,6 @@
 const express = require('express');
 const { authenticateToken, requireRole } = require('../middleware/auth');
-const { upload, processImage, deleteUploadedFile, getFileInfo } = require('../middleware/upload');
+const { upload, processImage, deleteUploadedFile, getFileInfo, validateMagicBytes } = require('../middleware/upload');
 const { query } = require('../config/database');
 
 const router = express.Router();
@@ -10,6 +10,10 @@ router.post('/single', authenticateToken, upload.single('image'), async (req, re
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No image file provided' });
+    }
+
+    if (!validateMagicBytes(req.file.buffer)) {
+      return res.status(400).json({ error: 'Invalid image file' });
     }
 
     // Process the image
@@ -44,6 +48,10 @@ router.post('/multiple', authenticateToken, upload.array('images', 50), async (r
     // Process each image
     for (const file of req.files) {
       try {
+        if (!validateMagicBytes(file.buffer)) {
+          console.error(`Invalid magic bytes for file: ${file.originalname}`);
+          continue;
+        }
         const processedImage = await processImage(
           file.buffer,
           file.originalname,

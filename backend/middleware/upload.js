@@ -54,10 +54,23 @@ ensureUploadDirs();
 // Configure multer for memory storage (we'll process with Sharp)
 const storage = multer.memoryStorage();
 
-// File filter for images only
+// Validate image magic bytes (called after multer buffers the file)
+const validateMagicBytes = (buffer) => {
+  if (!buffer || buffer.length < 12) return false;
+  // JPEG: FF D8 FF
+  if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) return true;
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47) return true;
+  // WebP: RIFF....WEBP
+  if (buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
+      buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50) return true;
+  return false;
+};
+
+// File filter for images only (MIME type pre-check; magic bytes validated post-buffer)
 const fileFilter = (req, file, cb) => {
   const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-  
+
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
@@ -214,5 +227,6 @@ module.exports = {
   cleanupTempFiles,
   deleteUploadedFile,
   getFileInfo,
-  ensureUploadDirs
+  ensureUploadDirs,
+  validateMagicBytes
 };

@@ -40,8 +40,8 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(helmet({
   crossOriginEmbedderPolicy: false,
-  crossOriginResourcePolicy: false,
-  contentSecurityPolicy: false
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+  contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false
 }));
 app.use(morgan('combined'));
 // Skip JSON parsing for upload routes
@@ -69,13 +69,22 @@ app.use('/api/images', (req, res, next) => {
   next();
 }, require('./middleware/imageOptimization'), express.static(path.join(projectRoot, 'uploads')));
 
-// Rate limiting (increased for development)
+// General rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 1000, // increased limit for development
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
   message: 'Too many requests from this IP, please try again later.'
 });
 app.use('/api/', limiter);
+
+// Strict rate limiting for auth endpoints (brute force protection)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20,
+  message: 'Too many login attempts, please try again later.'
+});
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
 
 // Branch context middleware (must be before routes)
 const branchContext = require('./middleware/branchContext');
