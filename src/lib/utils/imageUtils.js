@@ -1,6 +1,10 @@
 /**
  * Utility functions for handling image URLs
  */
+import { API_BASE_URL } from '@/lib/services/api';
+
+// Backend origin (strip the /api suffix)
+const BACKEND_URL = API_BASE_URL.replace(/\/api$/, '');
 
 /**
  * Constructs the full image URL for local images with optimization
@@ -17,9 +21,7 @@ export const getImageUrl = (imagePath, size = 'medium') => {
   }
   
   // For local API images, construct the URL pointing to backend server
-  const backendUrl = process.env.NODE_ENV === 'production' 
-    ? 'https://your-domain.com'  // Update this for production deployment
-    : 'http://localhost:3003';
+  const backendUrl = BACKEND_URL;
   
   // Remove leading slash if present to avoid double slashes
   let cleanPath = imagePath.startsWith('/') ? imagePath.substring(1) : imagePath;
