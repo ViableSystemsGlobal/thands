@@ -117,13 +117,13 @@ export async function requireRecaptchaVerification(token, remoteip = null) {
  */
 export async function verifyRecaptchaWithDevMode(token, remoteip = null) {
   // Never bypass reCAPTCHA in production, regardless of env vars
-  const isProduction = process.env.NODE_ENV === 'production';
+  const isProduction = import.meta.env.MODE === 'production';
   if (isProduction) {
     return requireRecaptchaVerification(token, remoteip);
   }
 
   // In non-production environments, allow bypass only when explicitly configured
-  const isDevelopment = process.env.NODE_ENV === 'development';
+  const isDevelopment = import.meta.env.MODE === 'development';
   const skipRecaptchaInDev = process.env.SKIP_RECAPTCHA_IN_DEV === 'true';
 
   if (isDevelopment && skipRecaptchaInDev) {

@@ -175,7 +175,7 @@ export const deleteImage = async (imageUrl) => {
     // Extract the filename from the URL
     const filename = imageUrl.split('/').pop();
     
-    const response = await fetch(`/api/upload/delete/${filename}`, {
+    const response = await fetch(`${API_BASE_URL}/upload/delete/${filename}`, {
       method: 'DELETE',
     });
 

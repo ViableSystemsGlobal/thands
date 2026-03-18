@@ -43,9 +43,7 @@ export const getImageUrl = (imagePath, size = 'medium') => {
 export const getOptimizedImageUrls = (imagePath) => {
   if (!imagePath) return null;
   
-  const backendUrl = process.env.NODE_ENV === 'production' 
-    ? 'https://your-domain.com'
-    : 'http://localhost:3003';
+  const backendUrl = BACKEND_URL;
   
   return {
     thumbnail: `${backendUrl}/api/images/${imagePath}?size=thumb`,

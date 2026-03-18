@@ -19,7 +19,7 @@ class ChatService {
         // Get auth token for authenticated connections
         const token = api.getToken();
         
-        this.socket = io(import.meta.env.VITE_API_URL || 'http://localhost:3003', {
+        this.socket = io((import.meta.env.VITE_API_URL || 'http://localhost:3003/api').replace(/\/api$/, ''), {
           auth: {
             token: token
           },
