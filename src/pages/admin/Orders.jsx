@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import { getOrders, updateOrderStatus, bulkUpdateOrderStatus, bulkDeleteOrders } from "@/lib/services/adminApi";
 import OrderMetrics from "@/components/admin/orders/OrderMetrics";
@@ -28,14 +28,39 @@ const OrdersContent = () => {
   const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE_OPTIONS[0]);
   const [totalOrdersCount, setTotalOrdersCount] = useState(0);
 
-  const [metrics, setMetrics] = useState({
-    totalOrders: 0,
-    pendingOrders: 0,
-    averageOrderValueUSD: 0,
-    totalOrderValueUSD: 0,
-    averageOrderValueGHS: 0,
-    totalOrderValueGHS: 0,
-  });
+  const [ordersForMetrics, setOrdersForMetrics] = useState([]);
+
+  const metrics = useMemo(() => {
+    const total = ordersForMetrics.length;
+    const pending = ordersForMetrics.filter(o => o.status?.toLowerCase() === 'pending').length;
+
+    const totalValueUSD = ordersForMetrics.reduce((sum, order) => {
+      let usd = parseFloat(order.base_total || order.total_amount || 0);
+      const ghs = parseFloat(order.base_total_ghs || order.total_amount_ghs || 0);
+      if (usd === 0 && ghs > 0) {
+        usd = ghs / (order.exchange_rate || exchangeRate || 1);
+      }
+      return sum + usd;
+    }, 0);
+
+    const totalValueGHS = ordersForMetrics.reduce((sum, order) => {
+      let ghs = parseFloat(order.base_total_ghs || order.total_amount_ghs || 0);
+      const usd = parseFloat(order.base_total || order.total_amount || 0);
+      if (ghs === 0 && usd > 0) {
+        ghs = usd * (order.exchange_rate || exchangeRate || 0);
+      }
+      return sum + ghs;
+    }, 0);
+
+    return {
+      totalOrders: total,
+      pendingOrders: pending,
+      totalOrderValueUSD: totalValueUSD,
+      averageOrderValueUSD: total > 0 ? totalValueUSD / total : 0,
+      totalOrderValueGHS: totalValueGHS,
+      averageOrderValueGHS: total > 0 ? totalValueGHS / total : 0,
+    };
+  }, [ordersForMetrics, exchangeRate]);
 
   const getDateFilterRange = useCallback(() => {
     const now = new Date();
@@ -112,57 +137,8 @@ const OrdersContent = () => {
 
       const fetchedOrders = response.orders || [];
       setOrders(fetchedOrders);
+      setOrdersForMetrics(fetchedOrders);
       setTotalOrdersCount(response.pagination?.total || 0);
-
-      // Calculate metrics from the fetched orders
-      const totalOrdersCountMetric = fetchedOrders.length;
-      const pendingOrdersCount = fetchedOrders.filter(order => 
-        order.status?.toLowerCase() === 'pending'
-      ).length;
-      
-      const totalValueUSD = fetchedOrders.reduce((sum, order) => {
-        // Use base_total (database field) or total_amount (fallback)
-        let usdValue = parseFloat(order.base_total || order.total_amount || 0);
-        const ghsValue = parseFloat(order.base_total_ghs || order.total_amount_ghs || 0);
-        
-        // If USD is 0 but GHS has a value, calculate USD from GHS
-        if (usdValue === 0 && ghsValue > 0) {
-          const rateToUse = order.exchange_rate || exchangeRate || 16;
-          usdValue = ghsValue / rateToUse;
-        }
-        
-        return sum + usdValue;
-      }, 0);
-      
-      const totalValueGHS = fetchedOrders.reduce((sum, order) => {
-        // Use base_total_ghs (database field) or total_amount_ghs (fallback)
-        let ghsValue = parseFloat(order.base_total_ghs || order.total_amount_ghs || 0);
-        const usdValue = parseFloat(order.base_total || order.total_amount || 0);
-        
-        // If GHS is 0 but USD has a value, calculate GHS from USD
-        if (ghsValue === 0 && usdValue > 0) {
-          const rateToUse = order.exchange_rate || exchangeRate || 16;
-          ghsValue = usdValue * rateToUse;
-        }
-        
-        return sum + ghsValue;
-      }, 0);
-      
-      setMetrics({
-        totalOrders: totalOrdersCountMetric,
-        pendingOrders: pendingOrdersCount,
-        totalOrderValueUSD: totalValueUSD,
-        averageOrderValueUSD: totalOrdersCountMetric > 0 ? totalValueUSD / totalOrdersCountMetric : 0,
-        totalOrderValueGHS: totalValueGHS,
-        averageOrderValueGHS: totalOrdersCountMetric > 0 ? totalValueGHS / totalOrdersCountMetric : 0,
-      });
-
-      console.log('📊 Admin Orders: Metrics calculated:', {
-        totalOrders: totalOrdersCountMetric,
-        pendingOrders: pendingOrdersCount,
-        totalValueUSD,
-        totalValueGHS
-      });
 
     } catch (error) {
       console.error("❌ Admin Orders: Error fetching orders:", error);
@@ -175,7 +151,7 @@ const OrdersContent = () => {
       setLoading(false);
       console.log('🏁 Admin Orders: Fetch completed');
     }
-  }, [currentPage, itemsPerPage, searchQuery, currentTab, dateRange, getDateFilterRange, toast, exchangeRate, loadingRate]);
+  }, [currentPage, itemsPerPage, searchQuery, currentTab, dateRange, getDateFilterRange, toast, loadingRate]);
 
   useEffect(() => {
     fetchOrders();

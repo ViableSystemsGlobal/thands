@@ -106,7 +106,7 @@ router.post('/', authenticateToken, [
   body('email').isEmail().normalizeEmail(),
   body('full_name').trim().isLength({ min: 2, max: 100 }),
   body('password').isLength({ min: 8 }),
-  body('role').isIn(['admin', 'manager', 'support']),
+  body('role').isIn(['super_admin', 'admin', 'manager', 'support']),
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
