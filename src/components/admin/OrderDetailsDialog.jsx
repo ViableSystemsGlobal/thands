@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { API_BASE_URL } from "@/lib/services/api";
 import {
   Dialog,
   DialogContent,
@@ -22,7 +23,7 @@ const OrderDetailsDialog = ({ order, open, onOpenChange }) => {
     if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
       return imagePath;
     }
-    return `http://localhost:3003/api/images/${imagePath}`;
+    return `${API_BASE_URL}/images/${imagePath}`;
   };
 
   const getStatusColor = (status) => {

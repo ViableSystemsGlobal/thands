@@ -1,5 +1,6 @@
 // Centralized Exchange Rate Service
 // This service manages the exchange rate between USD and GHS
+import { API_BASE_URL } from '@/lib/services/api';
 
 class ExchangeRateService {
   constructor() {
@@ -76,7 +77,7 @@ const exchangeRateService = new ExchangeRateService();
 const initializeExchangeRate = async () => {
   try {
     console.log('🔄 Loading exchange rate from API...');
-    const response = await fetch('http://localhost:3003/api/exchange-rate');
+    const response = await fetch(`${API_BASE_URL}/exchange-rate`);
     console.log('📡 Response status:', response.status);
     console.log('📡 Response headers:', response.headers);
     

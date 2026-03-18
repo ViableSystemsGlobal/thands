@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { api } from "@/lib/services/api";
+import { api, API_BASE_URL } from "@/lib/services/api";
 import exchangeRateService, { loadExchangeRateFromSettings } from "@/lib/services/exchangeRate";
 
 const CurrencyContext = createContext(null);
@@ -164,7 +164,7 @@ export const CurrencyProvider = ({ children }) => {
   useEffect(() => {
     const fetchGbpRate = async () => {
       try {
-        const response = await fetch('http://localhost:3003/api/exchange-rate');
+        const response = await fetch(`${API_BASE_URL}/exchange-rate`);
         if (response.ok) {
           const data = await response.json();
           if (data.exchange_rate_gbp) {

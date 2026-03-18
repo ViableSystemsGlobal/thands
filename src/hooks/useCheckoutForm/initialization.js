@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/lib/api";
+import { API_BASE_URL } from "@/lib/services/api";
 import { INITIAL_CHECKOUT_FORM_DATA } from "./constants";
 import React from 'react';
 
@@ -76,7 +77,7 @@ export const useFormInitialization = (
         const sessionId = localStorage.getItem("customer_session_id") || localStorage.getItem("session_id");
         if (sessionId) { 
             // Use the new API instead of Supabase
-            fetch(`http://localhost:3003/api/cart?session_id=${sessionId}`)
+            fetch(`${API_BASE_URL}/cart?session_id=${sessionId}`)
             .then(response => response.json())
             .then(cartItems => {
                 if (isMounted && cartItems.length === 0) {

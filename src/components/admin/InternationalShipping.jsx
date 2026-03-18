@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '@/lib/services/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -46,7 +47,7 @@ const InternationalShipping = ({ order, onLabelCreated, onClose }) => {
   const getShippingRates = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`http://localhost:3003/api/shipping/rates`, {
+      const response = await fetch(`${API_BASE_URL}/shipping/rates`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -93,7 +94,7 @@ const InternationalShipping = ({ order, onLabelCreated, onClose }) => {
 
     try {
       setLoading(true);
-      const response = await fetch(`http://localhost:3003/api/shipping/label`, {
+      const response = await fetch(`${API_BASE_URL}/shipping/label`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { API_BASE_URL } from '@/lib/services/api';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { MapPin, Loader2 } from 'lucide-react';
@@ -57,7 +58,7 @@ const GoogleAddressAutocomplete = ({
     const loadGoogleMapsAPI = async () => {
       try {
         // Fetch API key from backend
-        const response = await fetch('http://localhost:3003/api/settings/google-places-api-key');
+        const response = await fetch(`${API_BASE_URL}/settings/google-places-api-key`);
         const data = await response.json();
         const apiKey = data.google_places_api_key;
         

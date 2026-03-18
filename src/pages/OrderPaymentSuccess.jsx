@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { ArrowLeft, CheckCircle2, ShoppingCart, MapPin, Clock } from "lucide-react";
-import { api } from "@/lib/services/api";
+import { api, API_BASE_URL } from "@/lib/services/api";
 import { useCurrency } from "@/context/CurrencyContext";
 
 const LoadingState = () => (
@@ -61,7 +61,7 @@ const OrderItemCard = ({ item, displayCurrency, formatPrice }) => {
     if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
       return imagePath;
     }
-    return `http://localhost:3003/api/images/${imagePath}`;
+    return `${API_BASE_URL}/images/${imagePath}`;
   };
 
   const processedImageUrl = getImageUrlGlobal(itemImageUrl);

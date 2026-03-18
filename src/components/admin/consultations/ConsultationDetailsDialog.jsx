@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { API_BASE_URL } from '@/lib/services/api';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { User, Mail, Phone, FileText, Calendar, Clock, Info, Image as ImageIcon, Link as LinkIcon, Paperclip } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -42,7 +43,7 @@ const ConsultationDetailsDialog = ({ consultation, open, onOpenChange }) => {
       return imagePath;
     }
     // Assuming Supabase storage URL structure
-    return `http://localhost:3003/api/images/${imagePath}`;
+    return `${API_BASE_URL}/images/${imagePath}`;
   };
   
   const designUrls = Array.isArray(consultation.design_urls) ? consultation.design_urls : [];

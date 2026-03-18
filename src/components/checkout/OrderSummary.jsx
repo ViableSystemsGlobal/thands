@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { API_BASE_URL } from "@/lib/services/api";
 import { useShop } from "@/context/ShopContext";
 import { useCurrency } from "@/context/CurrencyContext";
 import { Button } from "@/components/ui/button";
@@ -66,7 +67,7 @@ const CheckoutOrderSummary = ({
       return imagePath;
     }
     // Use local API for images
-    return `http://localhost:3003/api/images/${imagePath}`;
+    return `${API_BASE_URL}/images/${imagePath}`;
   };
 
   return (

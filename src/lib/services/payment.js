@@ -7,12 +7,7 @@ export async function getPaymentConfig() {
     console.log('🚨 DEBUG: getPaymentConfig function called!');
     
     // Fetch from our backend API instead of directly from Supabase
-    const response = await fetch('http://localhost:3003/api/admin/settings');
-    if (!response.ok) {
-      throw new Error('Failed to fetch payment configuration');
-    }
-    
-    const result = await response.json();
+    const result = await api.get('/admin/settings');
     const data = {
       paystack_public_key: result.settings?.paystack_public_key,
       paystack_secret_key: result.settings?.paystack_secret_key

@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { ArrowLeft, Clock, CreditCard, CheckCircle2, Package, ShoppingCart, User, MapPin, Loader2 } from "lucide-react";
-import { api } from "@/lib/services/api";
+import { api, API_BASE_URL } from "@/lib/services/api";
 import { useCurrency } from "@/context/CurrencyContext";
 import { useShop } from "@/context/ShopContext";
 import { usePayment } from "@/hooks/usePayment";
@@ -14,7 +14,7 @@ const getImageUrlGlobal = (imagePath) => {
   if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
     return imagePath;
   }
-    return `http://localhost:3003/api/images/${imagePath}`;
+    return `${API_BASE_URL}/images/${imagePath}`;
 };
 
 const LoadingState = () => (

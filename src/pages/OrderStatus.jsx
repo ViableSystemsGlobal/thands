@@ -6,6 +6,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { ArrowLeft, Clock, CreditCard, CheckCircle2, Package, ShoppingCart, User, MapPin, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
+import { API_BASE_URL } from "@/lib/services/api";
 import { useCurrency } from "@/context/CurrencyContext";
 import { usePayment } from "@/hooks/usePayment";
 
@@ -14,7 +15,7 @@ const getImageUrlGlobal = (imagePath) => {
   if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
     return imagePath;
   }
-  return `http://localhost:3003/api/images/${imagePath}`;
+  return `${API_BASE_URL}/images/${imagePath}`;
 };
 
 const LoadingState = () => (

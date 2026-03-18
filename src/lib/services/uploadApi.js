@@ -2,6 +2,7 @@
  * Upload API Service
  * Handles file uploads to local server instead of Supabase storage
  */
+import { API_BASE_URL } from '@/lib/services/api';
 
 // Upload hero image
 export const uploadHeroImage = async (file) => {
@@ -22,7 +23,7 @@ export const uploadHeroImage = async (file) => {
 
     console.log('📤 Uploading to /api/upload/hero, file type:', file instanceof FormData ? 'FormData' : file?.type);
 
-    const response = await fetch('http://localhost:3003/api/upload/hero', {
+    const response = await fetch(`${API_BASE_URL}/upload/hero`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`
@@ -55,7 +56,7 @@ export const uploadCollectionImage = async (file) => {
     const formData = new FormData();
     formData.append('image', file);
 
-    const response = await fetch('http://localhost:3003/api/upload/collection', {
+    const response = await fetch(`${API_BASE_URL}/upload/collection`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('admin_auth_token')}`
@@ -90,7 +91,7 @@ export const uploadProductImage = async (file) => {
       throw new Error('Admin authentication required');
     }
 
-    const response = await fetch('http://localhost:3003/api/upload/single', {
+    const response = await fetch(`${API_BASE_URL}/upload/single`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`
@@ -146,7 +147,7 @@ export const deleteProductImage = async (imageUrl) => {
       throw new Error('Admin authentication required');
     }
 
-    const response = await fetch(`http://localhost:3003/api/upload/${fileId}`, {
+    const response = await fetch(`${API_BASE_URL}/upload/${fileId}`, {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${token}`

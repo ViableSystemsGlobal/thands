@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { ArrowLeft, Package, Clock, CreditCard } from "lucide-react";
-import { api } from "@/lib/services/api";
+import { api, API_BASE_URL } from "@/lib/services/api";
 
 const OrderDetails = () => {
   const { id } = useParams();
@@ -18,7 +18,7 @@ const OrderDetails = () => {
     if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
       return imagePath;
     }
-    return `http://localhost:3003/api/images/${imagePath}`;
+    return `${API_BASE_URL}/images/${imagePath}`;
   };
 
   useEffect(() => {
