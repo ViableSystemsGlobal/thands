@@ -59,7 +59,7 @@ export const useOrderProcessing = (
         payment_gateway: 'paystack',
         payment_completed_at: new Date().toISOString(),
         items: cart.map(item => ({
-          product_id: item.product_id || null,
+          product_id: item.product_id || item.products?.id || null,
           gift_voucher_type_id: item.gift_voucher_type_id || null,
           quantity: item.quantity,
           price: item.is_gift_voucher && item.gift_voucher_types ? item.gift_voucher_types.amount : item.price,
@@ -289,7 +289,7 @@ export const useOrderProcessing = (
         shipping_email: formData.email,
         notes: formData.orderNotes,
         items: cart.map(item => ({
-          product_id: item.product_id || null,
+          product_id: item.product_id || item.products?.id || null,
           gift_voucher_type_id: item.gift_voucher_type_id || null,
           quantity: item.quantity,
           price: item.is_gift_voucher && item.gift_voucher_types ? item.gift_voucher_types.amount : item.price,

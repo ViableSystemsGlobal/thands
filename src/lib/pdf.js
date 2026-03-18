@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 // ─── Brand colours ────────────────────────────────────────────────────────────
 const GOLD       = [184, 134,  11];   // #B8860B
@@ -256,7 +256,7 @@ export const generateWaybillPDF = async (order, senderInfo = {}) => {
     'N/A',
   ]) || [['1', 'Clothing and Apparel', '1', 'Clothing / Apparel', 'N/A']];
 
-  doc.autoTable({
+  autoTable(doc, {
     startY: y3 + 8,
     head: [['#', 'Description', 'Qty', 'Category', 'HS Code']],
     body: contentRows,
@@ -487,7 +487,7 @@ export const generateOrderPDF = async (order) => {
       ];
     });
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: tableStartY,
       head: [['Item', 'Size', 'Qty', 'Unit (USD)', 'Unit (GHS)', 'Total (USD)', 'Total (GHS)']],
       body: tableRows,
@@ -529,7 +529,7 @@ export const generateOrderPDF = async (order) => {
     ];
     if (discUSD > 0) summaryRows.push(['Discount', `– ${fmtUSD(discUSD)}`, `– ${fmtGHS(discGHS)}`]);
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: summaryY,
       head: [['', 'USD', 'GHS']],
       body: summaryRows,
