@@ -295,44 +295,6 @@ router.post('/', [
   }
 });
 
-// Get order by order number (Public endpoint) - MUST come before /:id route
-router.get('/by-number/:orderNumber', async (req, res) => {
-  try {
-    const { orderNumber } = req.params;
-
-    // Get the order with customer details
-    const orderResult = await query(
-      `SELECT o.*, c.first_name, c.last_name, c.email, c.phone
-       FROM orders o
-       LEFT JOIN customers c ON o.customer_id = c.id
-       WHERE o.order_number = $1`,
-      [orderNumber]
-    );
-
-    if (orderResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
-
-    const order = orderResult.rows[0];
-
-    // Get order items
-    const itemsResult = await query(
-      `SELECT oi.*, p.name as product_name, p.image_url as product_image_url
-       FROM order_items oi
-       LEFT JOIN products p ON oi.product_id = p.id
-       WHERE oi.order_id = $1`,
-      [order.id]
-    );
-
-    order.items = itemsResult.rows;
-
-    res.json(order);
-  } catch (error) {
-    console.error('❌ Order fetch error:', error);
-    res.status(500).json({ error: 'Failed to fetch order', details: error.message });
-  }
-});
-
 // Bulk update order status (Admin only)
 router.patch('/bulk-status', authenticateToken, async (req, res) => {
   try {
@@ -521,7 +483,7 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
     try {
       if (status === 'shipped') {
         // Send order shipped notification
-        const notificationResponse = await fetch(`${process.env.API_BASE_URL || 'http://localhost:3003'}/api/notifications/send/order-shipped`, {
+        const notificationResponse = await fetch(`${'http://localhost:' + (process.env.PORT || 3003)}/api/notifications/send/order-shipped`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -541,7 +503,7 @@ router.patch('/:id/status', authenticateToken, async (req, res) => {
         }
       } else if (status === 'delivered') {
         // Send order delivered notification
-        const notificationResponse = await fetch(`${process.env.API_BASE_URL || 'http://localhost:3003'}/api/notifications/send/order-delivered`, {
+        const notificationResponse = await fetch(`${'http://localhost:' + (process.env.PORT || 3003)}/api/notifications/send/order-delivered`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

@@ -216,7 +216,7 @@ router.post('/', [
 
     // Send consultation notification
     try {
-      const notificationResponse = await fetch(`${process.env.API_BASE_URL || 'http://localhost:3003'}/api/notifications/send/consultation`, {
+      const notificationResponse = await fetch(`${'http://localhost:' + (process.env.PORT || 3003)}/api/notifications/send/consultation`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -239,7 +239,7 @@ router.post('/', [
 
     // Send admin notification for new consultation
     try {
-      const adminNotificationResponse = await fetch(`${process.env.API_BASE_URL || 'http://localhost:3003'}/api/notifications/send/admin/consultation`, {
+      const adminNotificationResponse = await fetch(`${'http://localhost:' + (process.env.PORT || 3003)}/api/notifications/send/admin/consultation`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

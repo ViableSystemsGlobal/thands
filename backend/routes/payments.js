@@ -39,7 +39,7 @@ router.post('/webhook/paystack', async (req, res) => {
 
       // Send payment success notification
       try {
-        const notificationResponse = await fetch(`${process.env.API_BASE_URL || 'http://localhost:3003'}/api/notifications/send/payment-success`, {
+        const notificationResponse = await fetch(`${'http://localhost:' + (process.env.PORT || 3003)}/api/notifications/send/payment-success`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -83,7 +83,7 @@ router.post('/webhook/paystack', async (req, res) => {
         } else {
           console.error('❌ [PAYMENT WEBHOOK] sendAdminOrderNotification is not a function');
           // Fallback to HTTP call
-          const adminNotificationResponse = await fetch(`${process.env.API_BASE_URL || 'http://localhost:3003'}/api/notifications/send/admin/order`, {
+          const adminNotificationResponse = await fetch(`${'http://localhost:' + (process.env.PORT || 3003)}/api/notifications/send/admin/order`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
@@ -154,7 +154,7 @@ router.post('/confirm/:orderId', async (req, res) => {
 
     // Send payment success notification (customer)
     try {
-      const notificationResponse = await fetch(`${process.env.API_BASE_URL || 'http://localhost:3003'}/api/notifications/send/payment-success`, {
+      const notificationResponse = await fetch(`${'http://localhost:' + (process.env.PORT || 3003)}/api/notifications/send/payment-success`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

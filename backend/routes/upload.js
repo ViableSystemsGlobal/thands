@@ -259,7 +259,7 @@ router.post('/hero', authenticateToken, upload.single('image'), async (req, res)
       'hero'
     );
 
-    const baseUrl = `http://localhost:${process.env.PORT || 3003}`;
+    const baseUrl = process.env.RENDER_EXTERNAL_URL || `${req.protocol}://${req.get('host')}`;
     res.json({
       success: true,
       url: `${baseUrl}${processedImage.processedImages.thumbnails.url}`,
@@ -290,7 +290,7 @@ router.post('/collection', authenticateToken, upload.single('image'), async (req
     );
 
     console.log('Collection upload - processedImage:', JSON.stringify(processedImage, null, 2));
-    const baseUrl = `http://localhost:${process.env.PORT || 3003}`;
+    const baseUrl = process.env.RENDER_EXTERNAL_URL || `${req.protocol}://${req.get('host')}`;
     res.json({
       success: true,
       url: `${baseUrl}${processedImage.processedImages.thumbnails.url}`,
@@ -321,7 +321,7 @@ router.post('/newsletter', authenticateToken, upload.single('image'), async (req
     );
 
     console.log('Newsletter upload - processedImage:', JSON.stringify(processedImage, null, 2));
-    const baseUrl = `http://localhost:${process.env.PORT || 3003}`;
+    const baseUrl = process.env.RENDER_EXTERNAL_URL || `${req.protocol}://${req.get('host')}`;
     res.json({
       success: true,
       url: `${baseUrl}${processedImage.processedImages.thumbnails.url}`,

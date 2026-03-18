@@ -99,7 +99,7 @@ router.post('/', [
 
     // Send admin notification for new message
     try {
-      const adminNotificationResponse = await fetch(`${process.env.API_BASE_URL || 'http://localhost:3003'}/api/notifications/send/admin/message`, {
+      const adminNotificationResponse = await fetch(`${'http://localhost:' + (process.env.PORT || 3003)}/api/notifications/send/admin/message`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
