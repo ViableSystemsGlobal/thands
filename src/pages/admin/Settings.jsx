@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Save, Loader2, AlertCircle, CheckCircle, Settings as SettingsIcon, Store, DollarSign, CreditCard, Shield, Image, Users, Database, ShieldCheck, Plus, Trash2, Upload, Download, X, Mail, Truck, Layers } from 'lucide-react';
+import { Save, Loader2, AlertCircle, CheckCircle, Settings as SettingsIcon, Store, DollarSign, CreditCard, Shield, Image, Users, Database, ShieldCheck, Plus, Trash2, Upload, Download, X, Mail, Truck, Layers, Phone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -83,6 +83,14 @@ const SettingsNew = () => {
     smtp_secure: false
   });
   const [savingEmailSettings, setSavingEmailSettings] = useState(false);
+
+  // SMS settings state
+  const [smsSettings, setSmsSettings] = useState({
+    deywuro_username: '',
+    deywuro_password: '',
+    deywuro_source: 'T-Hands',
+  });
+  const [savingSmsSettings, setSavingSmsSettings] = useState(false);
 
   // DHL Shipping settings state
   const [shippingSettings, setShippingSettings] = useState({
@@ -187,6 +195,13 @@ const SettingsNew = () => {
   useEffect(() => {
     if (activeSection === 'email') {
       loadEmailSettings();
+    }
+  }, [activeSection]);
+
+  // Load SMS settings when sms section is active
+  useEffect(() => {
+    if (activeSection === 'sms') {
+      loadSmsSettings();
     }
   }, [activeSection]);
 
@@ -479,6 +494,39 @@ const SettingsNew = () => {
       });
     } finally {
       setSavingEmailSettings(false);
+    }
+  };
+
+  // SMS settings functions
+  const loadSmsSettings = async () => {
+    try {
+      const response = await adminApiClient.get('/sms/settings');
+      const data = (response.data || response)?.data || response.data || {};
+      setSmsSettings({
+        deywuro_username: data.deywuro_username || '',
+        deywuro_password: data.deywuro_password || '',
+        deywuro_source: data.deywuro_source || 'T-Hands',
+      });
+    } catch (error) {
+      console.error('Error loading SMS settings:', error);
+      toast({ title: "Error", description: "Failed to load SMS settings", variant: "destructive" });
+    }
+  };
+
+  const saveSmsSettings = async () => {
+    setSavingSmsSettings(true);
+    try {
+      await adminApiClient.post('/sms/settings', {
+        deywuro_username: smsSettings.deywuro_username,
+        deywuro_password: smsSettings.deywuro_password,
+        deywuro_source: smsSettings.deywuro_source,
+      });
+      toast({ title: "Settings Saved", description: "SMS settings saved successfully.", className: "bg-green-50 border-green-200 text-green-700" });
+    } catch (error) {
+      console.error('Error saving SMS settings:', error);
+      toast({ title: "Error", description: "Failed to save SMS settings.", variant: "destructive" });
+    } finally {
+      setSavingSmsSettings(false);
     }
   };
 
@@ -1072,6 +1120,7 @@ const SettingsNew = () => {
     { id: 'security', label: 'Security', icon: Shield, color: 'text-red-600' },
     { id: 'appearance', label: 'Appearance', icon: Image, color: 'text-orange-600' },
     { id: 'email', label: 'Email Settings', icon: Mail, color: 'text-cyan-600' },
+    { id: 'sms', label: 'SMS Settings', icon: Phone, color: 'text-emerald-600' },
     { id: 'shipping', label: 'Shipping', icon: Truck, color: 'text-teal-600' },
     { id: 'google', label: 'Google Services', icon: SettingsIcon, color: 'text-blue-500' },
     { id: 'users', label: 'User Management', icon: ShieldCheck, color: 'text-indigo-600' },
@@ -1943,6 +1992,74 @@ const SettingsNew = () => {
                               <Save className="w-4 h-4 mr-2" />
                               Save Email Settings
                             </>
+                          )}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
+
+              {/* SMS Settings */}
+              {activeSection === 'sms' && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center space-x-2">
+                        <Phone className="h-5 w-5 text-emerald-600" />
+                        <span>SMS Settings</span>
+                      </CardTitle>
+                      <CardDescription>
+                        Configure Deywuro SMS API credentials for sending order and notification SMS messages
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <Label htmlFor="deywuro_username">Deywuro Username</Label>
+                          <Input
+                            id="deywuro_username"
+                            value={smsSettings.deywuro_username}
+                            onChange={(e) => setSmsSettings(prev => ({ ...prev, deywuro_username: e.target.value }))}
+                            placeholder="your-deywuro-username"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="deywuro_password">Deywuro Password</Label>
+                          <Input
+                            id="deywuro_password"
+                            type="password"
+                            value={smsSettings.deywuro_password}
+                            onChange={(e) => setSmsSettings(prev => ({ ...prev, deywuro_password: e.target.value }))}
+                            placeholder="your-deywuro-password"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="deywuro_source">Sender ID (Source)</Label>
+                          <Input
+                            id="deywuro_source"
+                            value={smsSettings.deywuro_source}
+                            onChange={(e) => setSmsSettings(prev => ({ ...prev, deywuro_source: e.target.value }))}
+                            placeholder="T-Hands"
+                            maxLength={11}
+                          />
+                          <p className="text-xs text-gray-500 mt-1">Max 11 characters. This is the sender name shown on the SMS.</p>
+                        </div>
+                      </div>
+                      <div className="flex justify-end">
+                        <Button
+                          onClick={saveSmsSettings}
+                          disabled={savingSmsSettings}
+                          className="bg-[#D2B48C] hover:bg-[#C19A6B]"
+                        >
+                          {savingSmsSettings ? (
+                            <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</>
+                          ) : (
+                            <><Save className="w-4 h-4 mr-2" />Save SMS Settings</>
                           )}
                         </Button>
                       </div>
