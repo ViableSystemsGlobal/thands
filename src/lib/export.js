@@ -2,7 +2,7 @@
 import adminApiClient from './services/adminApiClient';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/services/api';
 
 export const exportToCSV = (data, filename) => {
   const csvContent = convertToCSV(data);
@@ -171,77 +171,60 @@ export const fetchProductsForExport = async (searchQuery = '') => {
 };
 
 export const fetchOrdersForExport = async () => {
-  const { data, error } = await supabase
-    .from('orders')
-    .select(`
-      *,
-      customers (*),
-      order_items (
-        *,
-        products (*)
-      )
-    `);
-  
-  if (error) throw error;
-  
-  return data.map(order => ({
-    'Order Number': order.order_number,
-    'Customer Name': `${order.customers?.first_name} ${order.customers?.last_name}`,
-    'Customer Email': order.customers?.email,
-    'Total Amount': order.total_amount,
-    Currency: order.currency,
-    Status: order.status,
-    'Payment Status': order.payment_status,
-    'Items Count': order.order_items?.length || 0,
-    'Created At': new Date(order.created_at).toLocaleString(),
-    'Updated At': order.updated_at ? new Date(order.updated_at).toLocaleString() : 'N/A'
-  }));
+  try {
+    const data = await api.get('/orders?limit=10000');
+    const orders = data.orders || data || [];
+
+    return orders.map(order => ({
+      'Order Number': order.order_number,
+      'Customer Name': order.customers
+        ? `${order.customers.first_name} ${order.customers.last_name}`
+        : `${order.shipping_first_name || ''} ${order.shipping_last_name || ''}`.trim(),
+      'Customer Email': order.customers?.email || order.shipping_email,
+      'Total Amount': order.total_amount,
+      Currency: order.currency,
+      Status: order.status,
+      'Payment Status': order.payment_status,
+      'Items Count': order.order_items?.length || 0,
+      'Created At': new Date(order.created_at).toLocaleString(),
+      'Updated At': order.updated_at ? new Date(order.updated_at).toLocaleString() : 'N/A'
+    }));
+  } catch (error) {
+    console.error('Error fetching orders for export:', error);
+    throw new Error(error.message || 'Failed to fetch orders for export');
+  }
 };
 
 export const fetchCustomersForExport = async () => {
-  const { data, error } = await supabase
-    .from('customers')
-    .select(`
-      *,
-      orders (*)
-    `);
-  
-  if (error) throw error;
-  
-  return data.map(customer => ({
-    'Customer ID': customer.id,
-    'First Name': customer.first_name,
-    'Last Name': customer.last_name,
-    Email: customer.email,
-    Phone: customer.phone,
-    Address: customer.address,
-    City: customer.city,
-    State: customer.state,
-    Country: customer.country,
-    'Postal Code': customer.postal_code,
-    'Total Orders': customer.orders?.length || 0,
-    'Total Spent': customer.orders?.reduce((sum, order) => sum + order.total_amount, 0) || 0,
-    'Joined Date': new Date(customer.created_at).toLocaleString()
-  }));
+  try {
+    const data = await api.get('/customers?limit=10000');
+    const customers = data.customers || data || [];
+
+    return customers.map(customer => ({
+      'Customer ID': customer.id,
+      'First Name': customer.first_name,
+      'Last Name': customer.last_name,
+      Email: customer.email,
+      Phone: customer.phone,
+      Address: customer.address,
+      City: customer.city,
+      State: customer.state,
+      Country: customer.country,
+      'Postal Code': customer.postal_code,
+      'Total Orders': customer.orders?.length || customer.total_orders || 0,
+      'Total Spent': customer.total_spent || 0,
+      'Joined Date': new Date(customer.created_at).toLocaleString()
+    }));
+  } catch (error) {
+    console.error('Error fetching customers for export:', error);
+    throw new Error(error.message || 'Failed to fetch customers for export');
+  }
 };
 
 export const fetchConsultationsForExport = async () => {
-  const { data, error } = await supabase
-    .from('consultations')
-    .select('*');
-  
-  if (error) throw error;
-  
-  return data.map(consultation => ({
-    'Name': consultation.name,
-    'Email': consultation.email,
-    'Phone': consultation.phone,
-    'Type': consultation.type,
-    'Status': consultation.status,
-    'Preferred Date': consultation.preferred_date,
-    'Preferred Time': consultation.preferred_time,
-    'Created At': new Date(consultation.created_at).toLocaleString()
-  }));
+  // Consultations endpoint not yet implemented in backend - return empty array
+  console.warn('fetchConsultationsForExport: consultations endpoint not yet implemented in backend');
+  return [];
 };
 
 /**

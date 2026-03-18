@@ -1,4 +1,4 @@
-import { api } from '@/lib/services/api';
+import { api, API_BASE_URL } from '@/lib/services/api';
 import { sendEmail } from './email';
 import { sendSMS } from './sms';
 import { sendOrderConfirmationEmail, sendPaymentSuccessEmail } from './email';
@@ -641,22 +641,12 @@ export async function sendGiftVoucherPurchase(orderData, voucherData) {
 // Utility function to trigger notifications based on order status changes
 export async function handleOrderStatusChange(orderId, newStatus, previousStatus, additionalData = {}) {
   try {
-    // Fetch complete order data
-    const { data: orderData, error } = await supabase
-      .from('orders')
-      .select(`
-        *,
-        customers (*),
-        order_items (
-          *,
-          products (id, name, description, image_url),
-          gift_voucher_types (id, name, amount, description, validity_months, image_url)
-        )
-      `)
-      .eq('id', orderId)
-      .single();
+    // Fetch complete order data from backend API
+    const { api } = await import('@/lib/services/api');
+    const orderResponse = await api.get(`/orders/${orderId}`);
+    const orderData = orderResponse.order || orderResponse;
 
-    if (error) throw error;
+    if (!orderData) throw new Error(`Order ${orderId} not found`);
 
     console.log(`📧 Handling order status change: ${previousStatus} -> ${newStatus} for order ${orderData.order_number}`);
 

@@ -1,15 +1,10 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/services/api';
 import { useToast } from '@/components/ui/use-toast';
-import { 
-  fetchUserProfile, 
-  updateUserProfileLastSignIn, 
-  createInitialUserProfile 
-} from '@/lib/db/users';
 
 export const AUTH_STATUS = {
   IDLE: 'IDLE',
-  PENDING_ACTION: 'PENDING_ACTION', 
+  PENDING_ACTION: 'PENDING_ACTION',
   AUTHENTICATED: 'AUTHENTICATED',
   ERROR: 'ERROR'
 };
@@ -34,155 +29,74 @@ const AuthContext = createContext(defaultAuthContextValue);
 export const useAuth = () => useContext(AuthContext);
 
 const AuthProviderInternal = ({ children }) => {
-  // Basic state with useState only
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isAuthenticatedUser, setIsAuthenticatedUser] = useState(false);
-  // Always start with IDLE to prevent authentication loops
   const [status, setStatus] = useState(AUTH_STATUS.IDLE);
-  
+
   const { toast } = useToast();
-  
-  // Simple refs for preventing multiple auth attempts
+
   const authInProgressRef = useRef(false);
   const sessionCheckedRef = useRef(false);
-  const profileCreationInProgressRef = useRef(new Set()); // Track profile creation by user ID
 
-  // Helper function to safely create or fetch profile
-  const getOrCreateProfile = async (userId, email, fullName = null, role = 'customer') => {
-    // Prevent multiple concurrent profile creations for the same user
-    if (profileCreationInProgressRef.current.has(userId)) {
-      console.log(`⏳ Profile creation already in progress for user ${userId}, waiting...`);
-      // Wait for existing creation to complete
-      let attempts = 0;
-      while (profileCreationInProgressRef.current.has(userId) && attempts < 10) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-        attempts++;
-      }
-      // Try to fetch the profile again
-      const existingProfile = await fetchUserProfile(userId);
-      if (existingProfile) {
-        return existingProfile;
-      }
-    }
+  // Helper to set authenticated state from a user object returned by the API
+  const applyUserSession = (userObj) => {
+    setUser(userObj);
+    setProfile(userObj);
+    const determinedAdmin = userObj.role === 'admin';
+    setIsAdmin(determinedAdmin);
+    setIsAuthenticatedUser(true);
+    setStatus(AUTH_STATUS.AUTHENTICATED);
 
-    // First try to fetch existing profile
-    let userProfile = await fetchUserProfile(userId);
-    if (userProfile) {
-      console.log(`✅ Found existing profile for user ${userId}`);
-      return userProfile;
-    }
-
-    // Mark profile creation in progress
-    profileCreationInProgressRef.current.add(userId);
-    
-    try {
-      console.log(`🔄 Creating new profile for user ${userId}`);
-      const isAdminUser = email.includes('@tailoredhands.') || email === 'admin@tailoredhands.com';
-      const userRole = isAdminUser ? 'admin' : role;
-      
-      userProfile = await createInitialUserProfile(
-        userId, 
-        email, 
-        fullName || email.split('@')[0],
-        userRole
-      );
-      
-      console.log(`✅ Successfully created profile for user ${userId}`);
-      return userProfile;
-    } catch (error) {
-      console.error(`❌ Error creating profile for user ${userId}:`, error);
-      // Try one more time to fetch in case it was created by another process
-      const retryProfile = await fetchUserProfile(userId);
-      if (retryProfile) {
-        console.log(`✅ Found profile on retry for user ${userId}`);
-        return retryProfile;
-      }
-      throw error;
-    } finally {
-      // Always remove from progress tracking
-      profileCreationInProgressRef.current.delete(userId);
-    }
+    const authState = {
+      isAuthenticated: true,
+      isAdmin: determinedAdmin,
+      timestamp: Date.now()
+    };
+    localStorage.setItem('admin_auth_state', JSON.stringify(authState));
   };
 
-  // Simple check for existing session on mount - ONLY run once
+  // Check existing token on mount
   useEffect(() => {
     let mounted = true;
 
     const checkInitialSession = async () => {
       if (sessionCheckedRef.current || authInProgressRef.current) {
-        console.log('🔐 Session check already in progress, skipping...');
+        console.log('Session check already in progress, skipping...');
         return;
       }
-      
+
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        console.log('No auth_token found, user is not logged in');
+        setStatus(AUTH_STATUS.IDLE);
+        return;
+      }
+
       sessionCheckedRef.current = true;
       authInProgressRef.current = true;
       setStatus(AUTH_STATUS.PENDING_ACTION);
-      
-      console.log('🔐 Starting initial session check...');
-      
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (!mounted) return; // Component was unmounted
-        
-        if (error) {
-          console.error('❌ Initial session check error:', error);
-          localStorage.removeItem('admin_auth_state');
-          setStatus(AUTH_STATUS.IDLE);
-          return;
-        }
 
-        if (session) {
-          console.log('✅ Found existing session on mount');
-          // Process the session
-          setUser(session.user);
-          
-          try {
-            const userProfile = await getOrCreateProfile(
-              session.user.id,
-              session.user.email,
-              session.user.user_metadata?.full_name
-            );
-            
-            if (userProfile && mounted) {
-              setProfile(userProfile);
-              setIsAdmin(userProfile.role === 'admin');
-              setIsAuthenticatedUser(true);
-              setStatus(AUTH_STATUS.AUTHENTICATED);
-              
-              // Update cached auth state
-              const authState = {
-                isAuthenticated: true,
-                isAdmin: userProfile.role === 'admin',
-                timestamp: Date.now()
-              };
-              localStorage.setItem('admin_auth_state', JSON.stringify(authState));
-              
-              try {
-                await updateUserProfileLastSignIn(session.user.id);
-              } catch (error) {
-                console.warn('Failed to update last sign-in time:', error);
-              }
-            } else if (mounted) {
-              localStorage.removeItem('admin_auth_state');
-              setStatus(AUTH_STATUS.IDLE);
-            }
-          } catch (error) {
-            console.error('Error processing initial session:', error);
-            if (mounted) {
-              localStorage.removeItem('admin_auth_state');
-              setStatus(AUTH_STATUS.IDLE);
-            }
-          }
+      console.log('Starting initial session check...');
+
+      try {
+        const data = await api.get('/auth/verify');
+
+        if (!mounted) return;
+
+        if (data && data.user) {
+          console.log('Found valid session on mount');
+          applyUserSession(data.user);
         } else {
-          console.log('❌ No existing session found');
+          console.log('Token verify returned no user');
+          localStorage.removeItem('auth_token');
           localStorage.removeItem('admin_auth_state');
           if (mounted) setStatus(AUTH_STATUS.IDLE);
         }
       } catch (error) {
-        console.error('❌ Error during initial session check:', error);
+        console.error('Error during initial session check:', error);
+        localStorage.removeItem('auth_token');
         localStorage.removeItem('admin_auth_state');
         if (mounted) setStatus(AUTH_STATUS.IDLE);
       } finally {
@@ -194,74 +108,27 @@ const AuthProviderInternal = ({ children }) => {
 
     return () => {
       mounted = false;
-      // Clear any ongoing operations
       authInProgressRef.current = false;
-      profileCreationInProgressRef.current.clear();
     };
   }, []);
 
-  // Simple authentication functions
   const signInWithEmail = async (email, password, recaptchaToken = null) => {
     try {
       setStatus(AUTH_STATUS.PENDING_ACTION);
-      
-      // reCAPTCHA token will be verified by the backend
-      // For now, we just ensure the token is provided
+
       console.log('reCAPTCHA token received for admin login:', recaptchaToken ? 'Yes' : 'No');
-      
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      
-      if (error) {
+
+      const data = await api.post('/auth/login', { email, password });
+
+      if (!data || !data.token || !data.user) {
         setStatus(AUTH_STATUS.IDLE);
-        return { success: false, error };
+        return { success: false, error: { message: 'No session data received' } };
       }
-      
-      // Inline session processing
-      if (data.session) {
-        setUser(data.session.user);
-        
-        try {
-          const userProfile = await getOrCreateProfile(
-            data.session.user.id,
-            data.session.user.email,
-            data.session.user.user_metadata?.full_name
-          );
-          
-          if (userProfile) {
-            setProfile(userProfile);
-            const determinedAdmin = userProfile.role === 'admin';
-            setIsAdmin(determinedAdmin);
-            setIsAuthenticatedUser(true);
-            setStatus(AUTH_STATUS.AUTHENTICATED);
-            
-            // Update cached auth state
-            const authState = {
-              isAuthenticated: true,
-              isAdmin: determinedAdmin,
-              timestamp: Date.now()
-            };
-            localStorage.setItem('admin_auth_state', JSON.stringify(authState));
-            
-            try {
-              await updateUserProfileLastSignIn(data.session.user.id);
-            } catch (error) {
-              console.warn('Failed to update last sign-in time:', error);
-            }
-            
-            return { success: true, user: data.user };
-          } else {
-            setStatus(AUTH_STATUS.IDLE);
-            return { success: false, error: { message: "Failed to load user profile" } };
-          }
-        } catch (error) {
-          console.error('Error processing session:', error);
-          setStatus(AUTH_STATUS.IDLE);
-          return { success: false, error: { message: "Failed to process user data" } };
-        }
-      } else {
-        setStatus(AUTH_STATUS.IDLE);
-        return { success: false, error: { message: "No session data received" } };
-      }
+
+      localStorage.setItem('auth_token', data.token);
+      applyUserSession(data.user);
+
+      return { success: true, user: data.user };
     } catch (error) {
       setStatus(AUTH_STATUS.IDLE);
       return { success: false, error };
@@ -271,19 +138,20 @@ const AuthProviderInternal = ({ children }) => {
   const signUpWithEmail = async (email, password, fullName) => {
     try {
       setStatus(AUTH_STATUS.PENDING_ACTION);
-      const { data, error } = await supabase.auth.signUp({ 
-        email, 
-        password,
-        options: { data: { full_name: fullName } }
-      });
-      
-      if (error) {
-        setStatus(AUTH_STATUS.IDLE);
-        return { success: false, error };
+
+      const [firstName, ...rest] = (fullName || '').split(' ');
+      const lastName = rest.join(' ');
+
+      const data = await api.post('/auth/register', { email, password, firstName, lastName });
+
+      if (data && data.token && data.user) {
+        localStorage.setItem('auth_token', data.token);
+        applyUserSession(data.user);
+        return { success: true, user: data.user, needsConfirmation: false };
       }
-      
+
       setStatus(AUTH_STATUS.IDLE);
-      return { success: true, user: data.user, needsConfirmation: !data.session };
+      return { success: true, user: data?.user || null, needsConfirmation: true };
     } catch (error) {
       setStatus(AUTH_STATUS.IDLE);
       return { success: false, error };
@@ -293,28 +161,21 @@ const AuthProviderInternal = ({ children }) => {
   const handleSignOut = async () => {
     try {
       setStatus(AUTH_STATUS.PENDING_ACTION);
-      const { error } = await supabase.auth.signOut();
-      
-      // Clear all state
+
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('admin_auth_state');
+
       setUser(null);
       setProfile(null);
       setIsAdmin(false);
       setIsAuthenticatedUser(false);
       setStatus(AUTH_STATUS.IDLE);
-      
-      // Clear all cached state
-      localStorage.removeItem('admin_auth_state');
+
       sessionCheckedRef.current = false;
       authInProgressRef.current = false;
-      profileCreationInProgressRef.current.clear();
-      
-      if (error) {
-        console.error("Error signing out:", error);
-        toast({ title: "Sign Out Error", description: error.message, variant: "destructive" });
-      } else {
-        console.log("✅ Successfully signed out");
-        toast({ title: "Signed Out", description: "You have been successfully signed out." });
-      }
+
+      console.log('Successfully signed out');
+      toast({ title: "Signed Out", description: "You have been successfully signed out." });
     } catch (error) {
       console.error("Unexpected sign out error:", error);
       setStatus(AUTH_STATUS.IDLE);
@@ -322,75 +183,37 @@ const AuthProviderInternal = ({ children }) => {
   };
 
   const triggerAuthentication = async () => {
-    // Don't trigger if already authenticated or in progress
     if (status === AUTH_STATUS.AUTHENTICATED || authInProgressRef.current) {
-      console.log('🔐 Skipping auth trigger - already authenticated or in progress');
+      console.log('Skipping auth trigger - already authenticated or in progress');
       return;
     }
 
-    console.log('🔐 Manual authentication trigger...');
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      console.log('No token found during auth trigger');
+      setStatus(AUTH_STATUS.IDLE);
+      return;
+    }
+
+    console.log('Manual authentication trigger...');
     authInProgressRef.current = true;
     setStatus(AUTH_STATUS.PENDING_ACTION);
 
     try {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
-      if (error) {
-        console.error('❌ AuthProvider: Error getting session:', error);
-        localStorage.removeItem('admin_auth_state');
-        setStatus(AUTH_STATUS.IDLE);
-        return;
-      }
+      const data = await api.get('/auth/verify');
 
-      if (session) {
-        console.log('✅ Found valid session during trigger');
-        // Process the session
-        setUser(session.user);
-        
-        try {
-          const userProfile = await getOrCreateProfile(
-            session.user.id,
-            session.user.email,
-            session.user.user_metadata?.full_name
-          );
-          
-          if (userProfile) {
-            setProfile(userProfile);
-            const determinedAdmin = userProfile.role === 'admin';
-            setIsAdmin(determinedAdmin);
-            setIsAuthenticatedUser(true);
-            setStatus(AUTH_STATUS.AUTHENTICATED);
-            
-            // Update cached auth state
-            const authState = {
-              isAuthenticated: true,
-              isAdmin: determinedAdmin,
-              timestamp: Date.now()
-            };
-            localStorage.setItem('admin_auth_state', JSON.stringify(authState));
-            
-            try {
-              await updateUserProfileLastSignIn(session.user.id);
-            } catch (error) {
-              console.warn('Failed to update last sign-in time:', error);
-            }
-          } else {
-            console.error('❌ Failed to create/fetch user profile during trigger');
-            localStorage.removeItem('admin_auth_state');
-            setStatus(AUTH_STATUS.IDLE);
-          }
-        } catch (error) {
-          console.error('❌ Error processing session during trigger:', error);
-          localStorage.removeItem('admin_auth_state');
-          setStatus(AUTH_STATUS.IDLE);
-        }
+      if (data && data.user) {
+        console.log('Found valid session during trigger');
+        applyUserSession(data.user);
       } else {
-        console.log('❌ No session found during trigger');
+        console.log('No session found during trigger');
+        localStorage.removeItem('auth_token');
         localStorage.removeItem('admin_auth_state');
         setStatus(AUTH_STATUS.IDLE);
       }
     } catch (error) {
-      console.error('❌ Unexpected error during auth trigger:', error);
+      console.error('Unexpected error during auth trigger:', error);
+      localStorage.removeItem('auth_token');
       localStorage.removeItem('admin_auth_state');
       setStatus(AUTH_STATUS.IDLE);
     } finally {
@@ -399,29 +222,16 @@ const AuthProviderInternal = ({ children }) => {
   };
 
   const sendPasswordResetEmail = async (email) => {
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
-      
-      if (error) {
-        return { success: false, error };
-      }
-      
-      return { success: true };
-    } catch (error) {
-      return { success: false, error };
-    }
+    // No backend equivalent - direct users to contact support
+    return {
+      success: true,
+      message: "Please contact support to reset your password"
+    };
   };
 
-  const updatePassword = async (newPassword) => {
+  const updatePassword = async (newPassword, currentPassword = null) => {
     try {
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
-      
-      if (error) {
-        return { success: false, error };
-      }
-      
+      await api.put('/auth/change-password', { currentPassword, newPassword });
       return { success: true };
     } catch (error) {
       return { success: false, error };
@@ -429,16 +239,16 @@ const AuthProviderInternal = ({ children }) => {
   };
 
   const resetAuthState = () => {
-    console.log('🔄 Resetting auth state...');
+    console.log('Resetting auth state...');
     setUser(null);
     setProfile(null);
     setIsAdmin(false);
     setIsAuthenticatedUser(false);
     setStatus(AUTH_STATUS.IDLE);
+    localStorage.removeItem('auth_token');
     localStorage.removeItem('admin_auth_state');
     sessionCheckedRef.current = false;
     authInProgressRef.current = false;
-    profileCreationInProgressRef.current.clear();
   };
 
   const contextValue = {

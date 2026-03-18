@@ -1,6 +1,5 @@
-
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/services/api';
 import { useToast } from '@/components/ui/use-toast';
 import { useSearchParams } from 'react-router-dom';
 
@@ -18,15 +17,10 @@ const useShopProducts = () => {
 
   const fetchAllCategories = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('category')
-        .not('category', 'is', null);
-
-      if (error) throw error;
-      const uniqueCategories = [...new Set(data.map(item => item.category).filter(Boolean))];
-      setAllCategories(uniqueCategories);
-      return uniqueCategories;
+      const data = await api.get('/products/categories/list');
+      const categories = data.categories || data || [];
+      setAllCategories(categories);
+      return categories;
     } catch (err) {
       console.error("Error fetching categories:", err);
       toast({ title: "Error", description: "Failed to load categories", variant: "destructive" });
@@ -39,62 +33,43 @@ const useShopProducts = () => {
     setCurrentPage(page);
 
     try {
-      let query = supabase
-        .from('products')
-        .select('*, product_sizes(*)', { count: 'exact' });
+      const queryParams = new URLSearchParams();
+      queryParams.set('page', page);
+      queryParams.set('limit', PRODUCTS_PER_PAGE);
 
-      // Apply search first - simple and direct
       if (searchQuery && searchQuery.trim()) {
-        const searchTerm = searchQuery.trim();
-        query = query.or(`name.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,category.ilike.%${searchTerm}%`);
+        queryParams.set('search', searchQuery.trim());
       }
 
       const categoriesFilter = searchParams.getAll('category');
       if (categoriesFilter.length > 0) {
-        query = query.in('category', categoriesFilter);
+        categoriesFilter.forEach(cat => queryParams.append('category', cat));
       }
 
       const minPrice = searchParams.get('minPrice');
       const maxPrice = searchParams.get('maxPrice');
-      
-      if (minPrice || maxPrice) {
-        const productIdsWithMatchingSizes = await supabase
-          .from('product_sizes')
-          .select('product_id')
-          .gte('price', minPrice || 0)
-          .lte('price', maxPrice || Infinity);
-
-        if (productIdsWithMatchingSizes.error) throw productIdsWithMatchingSizes.error;
-        
-        const pIds = productIdsWithMatchingSizes.data.map(ps => ps.product_id);
-        if (pIds.length > 0) {
-          query = query.in('id', pIds);
-        } else {
-          query = query.eq('id', -1); // No products match price range
-        }
-      }
+      if (minPrice) queryParams.set('minPrice', minPrice);
+      if (maxPrice) queryParams.set('maxPrice', maxPrice);
 
       const sortOption = searchParams.get('sort') || 'newest';
-      if (sortOption === 'newest') query = query.order('created_at', { ascending: false });
-      else if (sortOption === 'oldest') query = query.order('created_at', { ascending: true });
-      else if (sortOption === 'name_asc') query = query.order('name', { ascending: true });
-      else if (sortOption === 'name_desc') query = query.order('name', { ascending: false });
+      queryParams.set('sort', sortOption);
 
-      const { data, error, count } = await query.range((page - 1) * PRODUCTS_PER_PAGE, page * PRODUCTS_PER_PAGE - 1);
+      const data = await api.get(`/products?${queryParams.toString()}`);
 
-      if (error) throw error;
-      
-      let sortedData = data || [];
+      let fetchedProducts = data.products || data || [];
+      const total = data.total || fetchedProducts.length;
+
+      // Client-side price sort if needed (backend may not support it)
       if (sortOption === 'price_asc' || sortOption === 'price_desc') {
-        sortedData.sort((a, b) => {
+        fetchedProducts = [...fetchedProducts].sort((a, b) => {
           const priceA = a.product_sizes?.[0]?.price || 0;
           const priceB = b.product_sizes?.[0]?.price || 0;
           return sortOption === 'price_asc' ? priceA - priceB : priceB - priceA;
         });
       }
 
-      setProducts(sortedData);
-      setTotalPages(Math.ceil((count || 0) / PRODUCTS_PER_PAGE));
+      setProducts(fetchedProducts);
+      setTotalPages(Math.ceil(total / PRODUCTS_PER_PAGE));
 
     } catch (err) {
       console.error("Error fetching products:", err);
@@ -112,7 +87,7 @@ const useShopProducts = () => {
 
   useEffect(() => {
     const searchQuery = searchParams.get('search') || '';
-    fetchProducts(1, searchQuery); // Always start from page 1 when search changes
+    fetchProducts(1, searchQuery);
   }, [searchParams, fetchProducts]);
 
   const handlePageChange = (newPage) => {
@@ -129,7 +104,7 @@ const useShopProducts = () => {
     currentPage,
     totalPages,
     handlePageChange,
-    fetchAllCategories, 
+    fetchAllCategories,
     fetchProducts,
   };
 };

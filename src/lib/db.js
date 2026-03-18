@@ -1,68 +1,68 @@
+// Central re-export module for database/API functions
+// Supabase has been replaced with backend API calls in individual modules
 
-import { supabase } from "./supabase";
-
-import { 
-    loginUser, 
-    signupUser 
+import {
+    loginUser,
+    signupUser
 } from "./db/auth";
 
-import { 
-    getOrCreateCustomer, 
-    updateCustomerDetails, 
-    createNewAuthUserAndCustomer, 
-    createNewGuestCustomerRecord 
+import {
+    getOrCreateCustomer,
+    updateCustomerDetails,
+    createNewAuthUserAndCustomer,
+    createNewGuestCustomerRecord
 } from "./db/customer";
 
-import { 
-    fetchFAQsByProductId, 
-    fetchAllFAQsForAdmin, 
-    addFAQ, 
-    deleteFAQ, 
-    fetchGeneralFAQs 
+import {
+    fetchFAQsByProductId,
+    fetchAllFAQsForAdmin,
+    addFAQ,
+    deleteFAQ,
+    fetchGeneralFAQs
 } from "./db/faqs";
 
-import { 
-    fetchAllProducts, 
-    fetchProductById, 
-    addProduct, 
-    updateProduct, 
-    deleteProduct, 
-    fetchFeaturedProducts, 
-    fetchProductsByCategory 
+import {
+    fetchAllProducts,
+    fetchProductById,
+    addProduct,
+    updateProduct,
+    deleteProduct,
+    fetchFeaturedProducts,
+    fetchProductsByCategory
 } from "./db/products";
 
-import { 
-    fetchOrdersForAdmin, 
-    fetchOrderByIdForAdmin, 
-    updateOrderStatusForAdmin, 
-    fetchOrdersByUserId 
+import {
+    fetchOrdersForAdmin,
+    fetchOrderByIdForAdmin,
+    updateOrderStatusForAdmin,
+    fetchOrdersByUserId
 } from "./db/orders";
 
-import { 
-    fetchGiftVoucherTypes, 
-    addGiftVoucherType, 
-    updateGiftVoucherType, 
-    deleteGiftVoucherType, 
-    fetchActiveGiftVoucherTypes, 
-    fetchGiftVoucherTypeById 
+import {
+    fetchGiftVoucherTypes,
+    addGiftVoucherType,
+    updateGiftVoucherType,
+    deleteGiftVoucherType,
+    fetchActiveGiftVoucherTypes,
+    fetchGiftVoucherTypeById
 } from "./db/giftVoucherTypes";
 
-import { 
-    fetchIssuedGiftVouchersForAdmin, 
-    updateIssuedGiftVoucherStatus, 
-    fetchGiftVoucherByCode, 
-    redeemGiftVoucher, 
-    createGiftVoucher 
+import {
+    fetchIssuedGiftVouchersForAdmin,
+    updateIssuedGiftVoucherStatus,
+    fetchGiftVoucherByCode,
+    redeemGiftVoucher,
+    createGiftVoucher
 } from "./db/issuedGiftVouchers";
 
-import { 
+import {
     fetchUserProfile,
     createInitialUserProfile,
     updateUserProfileLastSignIn,
     fetchUsersWithEdgeFunction,
     updateUserRoleWithEdgeFunction,
     deleteUserWithEdgeFunction,
-    inviteUserByEmailWithEdgeFunction 
+    inviteUserByEmailWithEdgeFunction
 } from "./db/users";
 
 import {
@@ -74,7 +74,6 @@ import {
 
 
 export {
-  supabase,
   loginUser,
   signupUser,
   getOrCreateCustomer,

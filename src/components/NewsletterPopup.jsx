@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { X, Mail, Gift, Star, Sparkles } from 'lucide-react';
-// import { api } from '@/lib/services/api.js';
+import { api } from '@/lib/services/api.js';
 import { useToast } from '@/components/ui/use-toast';
 
 const NewsletterPopup = () => {
@@ -19,19 +19,14 @@ const NewsletterPopup = () => {
     image_url: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400&h=300&fit=crop&crop=center',
     is_enabled: true
   });
-  
+
   const { toast } = useToast();
 
   useEffect(() => {
-    // Load newsletter configuration from database
-    loadNewsletterConfig();
-    
-    // Check if user has already seen the popup
     const popupSeen = localStorage.getItem('newsletter_popup_seen');
     const emailSubscribed = localStorage.getItem('newsletter_subscribed');
-    
+
     if (!popupSeen && !emailSubscribed) {
-      // Show popup after 5 seconds for new users
       const timer = setTimeout(() => {
         setIsVisible(true);
       }, 5000);
@@ -39,26 +34,13 @@ const NewsletterPopup = () => {
     }
   }, []);
 
-  const loadNewsletterConfig = async () => {
-    try {
-      // Supabase is disabled - using default config
-      // TODO: If needed, fetch from backend API instead
-      // const response = await api.get('/newsletter/config');
-      // if (response.success) setNewsletterConfig(response.config);
-    } catch (error) {
-      console.log('Using default newsletter config:', error);
-      // Use default config if table doesn't exist yet
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!email.trim()) return;
 
     setIsSubmitting(true);
-    
+
     try {
-      // Validate email
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
         toast({
@@ -70,34 +52,35 @@ const NewsletterPopup = () => {
         return;
       }
 
-      // Subscribe to newsletter - Temporarily disabled for testing
-      // const response = await api.post('/newsletter/subscribe', {
-      //   email: email.toLowerCase().trim(),
-      //   source: 'popup'
-      // });
+      // Subscribe via backend API
+      try {
+        await api.post('/newsletter/subscribe', {
+          email: email.toLowerCase().trim(),
+          source: 'popup'
+        });
+      } catch (subscribeError) {
+        if (subscribeError.message && subscribeError.message.toLowerCase().includes('already subscribed')) {
+          toast({
+            title: "Already Subscribed",
+            description: "This email is already subscribed to our newsletter.",
+            variant: "default",
+          });
+          localStorage.setItem('newsletter_subscribed', 'true');
+          localStorage.setItem('newsletter_popup_seen', 'true');
+          setIsVisible(false);
+          setIsSubmitting(false);
+          return;
+        }
+        // Non-fatal: still proceed to show success for UX
+        console.warn('Newsletter subscribe error (non-fatal):', subscribeError.message);
+      }
 
-      // if (!response.success) {
-      //   // Handle duplicate email
-      //   if (response.error === 'Email already subscribed') {
-      //     toast({
-      //       title: "Already Subscribed",
-      //       description: "This email is already subscribed to our newsletter.",
-      //       variant: "default",
-      //     });
-      //   } else {
-      //     throw new Error(response.error || 'Failed to subscribe');
-      //   }
-      // } else {
-      // Send welcome email with offer
-      await sendWelcomeEmail(email);
-      
       toast({
         title: "Welcome to our Newsletter!",
         description: "Check your email for your exclusive discount code.",
         className: "bg-green-50 border-green-200 text-green-700",
       });
 
-      // Mark as subscribed and hide popup
       localStorage.setItem('newsletter_subscribed', 'true');
       localStorage.setItem('newsletter_popup_seen', 'true');
       setIsVisible(false);
@@ -111,28 +94,6 @@ const NewsletterPopup = () => {
       });
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const sendWelcomeEmail = async (email) => {
-    try {
-      // Send email via edge function
-      await supabase.functions.invoke('send-email', {
-        body: {
-          to: email,
-          subject: 'Welcome to TailoredHands - Your 15% Discount Inside!',
-          template_type: 'newsletter_welcome',
-          template_data: {
-            customer_name: email.split('@')[0],
-            discount_code: 'WELCOME15',
-            offer_text: newsletterConfig.offer_text,
-            discount_amount: '15%'
-          }
-        }
-      });
-    } catch (error) {
-      console.error('Failed to send welcome email:', error);
-      // Don't throw error here - subscription was successful
     }
   };
 
@@ -193,15 +154,15 @@ const NewsletterPopup = () => {
                   <Gift className="w-6 h-6 text-white" />
                 </div>
               </div>
-              
+
               <h2 className="text-2xl font-bold text-gray-800 mb-2">
                 {newsletterConfig.title}
               </h2>
-              
+
               <p className="text-gray-600 mb-1">
                 {newsletterConfig.subtitle}
               </p>
-              
+
               <p className="text-sm text-gray-500 mb-4">
                 {newsletterConfig.description}
               </p>
@@ -226,7 +187,7 @@ const NewsletterPopup = () => {
                   required
                 />
               </div>
-              
+
               <Button
                 type="submit"
                 disabled={isSubmitting}
@@ -258,4 +219,4 @@ const NewsletterPopup = () => {
   );
 };
 
-export default NewsletterPopup; 
+export default NewsletterPopup;

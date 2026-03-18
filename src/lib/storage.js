@@ -1,35 +1,35 @@
+const API_BASE = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3003';
+const UPLOAD_URL = `${API_BASE}/api/upload`;
 
-import { supabase } from './supabase';
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('auth_token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
 
 export const uploadProductImage = async (file) => {
   try {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-    const filePath = `products/${fileName}`;
+    const formData = new FormData();
+    formData.append('image', file);
 
-    // Upload the file to Supabase storage
-    const { data, error: uploadError } = await supabase.storage
-      .from('uploads')
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: false
-      });
+    const response = await fetch(`${UPLOAD_URL}/single`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: formData,
+    });
 
-    if (uploadError) {
-      console.error('Upload error:', uploadError);
-      return { error: uploadError.message };
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      return { error: errorData.error || `Upload failed: HTTP ${response.status}` };
     }
 
-    // Get the public URL
-    const { data: { publicUrl } } = supabase.storage
-      .from('uploads')
-      .getPublicUrl(filePath);
+    const data = await response.json();
+    const url = data.url || data.imageUrl || data.image_url;
 
-    if (!publicUrl) {
+    if (!url) {
       return { error: 'Failed to get public URL for uploaded image' };
     }
 
-    return { url: publicUrl };
+    return { url };
   } catch (error) {
     console.error('Upload error:', error);
     return { error: `Failed to upload image: ${error.message}` };
@@ -37,56 +37,34 @@ export const uploadProductImage = async (file) => {
 };
 
 export const deleteProductImage = async (imageUrl) => {
-  try {
-    if (!imageUrl) return;
-
-    // Extract the file path from the URL
-    const urlParts = imageUrl.split('/');
-    const filePath = `products/${urlParts[urlParts.length - 1]}`;
-
-    const { error } = await supabase.storage
-      .from('uploads')
-      .remove([filePath]);
-
-    if (error) {
-      console.error('Delete error:', error);
-      throw error;
-    }
-  } catch (error) {
-    console.error('Delete error:', error);
-    throw new Error(`Failed to delete image: ${error.message}`);
-  }
+  // Deletion of backend-stored images is not required from the frontend
+  console.log('deleteProductImage: no-op for backend-stored image', imageUrl);
 };
 
 export const uploadHeroImage = async (file) => {
   try {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `hero-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-    const filePath = `hero/${fileName}`;
+    const formData = new FormData();
+    formData.append('image', file);
 
-    // Upload the file to Supabase storage
-    const { data, error: uploadError } = await supabase.storage
-      .from('uploads')
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: false
-      });
+    const response = await fetch(`${UPLOAD_URL}/hero`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: formData,
+    });
 
-    if (uploadError) {
-      console.error('Hero image upload error:', uploadError);
-      return { error: uploadError.message };
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      return { error: errorData.error || `Upload failed: HTTP ${response.status}` };
     }
 
-    // Get the public URL
-    const { data: { publicUrl } } = supabase.storage
-      .from('uploads')
-      .getPublicUrl(filePath);
+    const data = await response.json();
+    const url = data.url || data.imageUrl || data.image_url;
 
-    if (!publicUrl) {
+    if (!url) {
       return { error: 'Failed to get public URL for uploaded hero image' };
     }
 
-    return { url: publicUrl };
+    return { url };
   } catch (error) {
     console.error('Hero image upload error:', error);
     return { error: `Failed to upload hero image: ${error.message}` };
@@ -94,23 +72,6 @@ export const uploadHeroImage = async (file) => {
 };
 
 export const deleteHeroImage = async (imageUrl) => {
-  try {
-    if (!imageUrl) return;
-
-    // Extract the file path from the URL
-    const urlParts = imageUrl.split('/');
-    const filePath = `hero/${urlParts[urlParts.length - 1]}`;
-
-    const { error } = await supabase.storage
-      .from('uploads')
-      .remove([filePath]);
-
-    if (error) {
-      console.error('Hero image delete error:', error);
-      throw error;
-    }
-  } catch (error) {
-    console.error('Hero image delete error:', error);
-    throw new Error(`Failed to delete hero image: ${error.message}`);
-  }
+  // Deletion of backend-stored images is not required from the frontend
+  console.log('deleteHeroImage: no-op for backend-stored image', imageUrl);
 };

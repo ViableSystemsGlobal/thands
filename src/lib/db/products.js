@@ -1,85 +1,47 @@
-
-import { supabase } from "../supabase";
+import { api } from '@/lib/services/api';
 
 export const fetchAllProducts = async () => {
-  const { data, error } = await supabase
-    .from("products")
-    .select("*, product_sizes(*)")
-    .order("created_at", { ascending: false });
-  if (error) throw error;
-  return data.map(p => ({ ...p, base_price: p.product_sizes[0]?.price || 0 }));
+  const data = await api.get('/products?limit=1000');
+  const products = data.products || data || [];
+  return products.map(p => ({ ...p, base_price: p.product_sizes?.[0]?.price || p.base_price || 0 }));
 };
 
 export const fetchProductById = async (id) => {
-  const { data, error } = await supabase
-    .from("products")
-    .select("*, product_sizes(*)")
-    .eq("id", id)
-    .single();
-  if (error) throw error;
-  return { ...data, base_price: data.product_sizes[0]?.price || 0 };
+  const data = await api.get(`/products/${id}`);
+  const product = data.product || data;
+  return { ...product, base_price: product.product_sizes?.[0]?.price || product.base_price || 0 };
 };
 
 export const addProduct = async (productData, sizesData) => {
-  const { data: product, error: productError } = await supabase
-    .from("products")
-    .insert([productData])
-    .select()
-    .single();
-  if (productError) throw productError;
-
+  const payload = { ...productData };
   if (sizesData && sizesData.length > 0) {
-    const sizesToInsert = sizesData.map(s => ({ ...s, product_id: product.id }));
-    const { error: sizesError } = await supabase.from("product_sizes").insert(sizesToInsert);
-    if (sizesError) {
-      await supabase.from("products").delete().eq("id", product.id); 
-      throw sizesError;
-    }
+    payload.sizes = sizesData;
   }
-  return product;
+  const data = await api.post('/products', payload);
+  return data.product || data;
 };
 
 export const updateProduct = async (id, productData, sizesData) => {
-  const { data: product, error: productError } = await supabase
-    .from("products")
-    .update(productData)
-    .eq("id", id)
-    .select()
-    .single();
-  if (productError) throw productError;
-
-  await supabase.from("product_sizes").delete().eq("product_id", id);
+  const payload = { ...productData };
   if (sizesData && sizesData.length > 0) {
-    const sizesToInsert = sizesData.map(s => ({ ...s, product_id: product.id }));
-    const { error: sizesError } = await supabase.from("product_sizes").insert(sizesToInsert);
-    if (sizesError) throw sizesError;
+    payload.sizes = sizesData;
   }
-  return product;
+  const data = await api.put(`/products/${id}`, payload);
+  return data.product || data;
 };
 
 export const deleteProduct = async (id) => {
-  await supabase.from("product_sizes").delete().eq("product_id", id);
-  const { error } = await supabase.from("products").delete().eq("id", id);
-  if (error) throw error;
+  await api.delete(`/products/${id}`);
 };
 
 export const fetchFeaturedProducts = async () => {
-  const { data, error } = await supabase
-    .from("products")
-    .select("*, product_sizes(*)")
-    .eq("is_featured", true)
-    .order("created_at", { ascending: false })
-    .limit(8);
-  if (error) throw error;
-  return data.map(p => ({ ...p, base_price: p.product_sizes[0]?.price || 0 }));
+  const data = await api.get('/products?featured=true&limit=8');
+  const products = data.products || data || [];
+  return products.map(p => ({ ...p, base_price: p.product_sizes?.[0]?.price || p.base_price || 0 }));
 };
 
 export const fetchProductsByCategory = async (category) => {
-    const { data, error } = await supabase
-        .from('products')
-        .select('*, product_sizes(*)')
-        .eq('category', category)
-        .order('created_at', { ascending: false });
-    if (error) throw error;
-    return data.map(p => ({ ...p, base_price: p.product_sizes[0]?.price || 0 }));
+  const data = await api.get(`/products?category=${encodeURIComponent(category)}`);
+  const products = data.products || data || [];
+  return products.map(p => ({ ...p, base_price: p.product_sizes?.[0]?.price || p.base_price || 0 }));
 };

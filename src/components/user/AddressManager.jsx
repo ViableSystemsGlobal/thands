@@ -18,7 +18,7 @@ import {
   Users
 } from "lucide-react";
 import { motion } from "framer-motion";
-import { supabase } from "@/lib/supabase";
+import { api } from "@/lib/services/api";
 
 const AddressCard = ({ 
   address, 
@@ -326,50 +326,21 @@ const AddressManager = ({ userId }) => {
     try {
       setLoading(true);
 
-      // Fetch saved addresses
-      const { data: savedAddresses, error: addressError } = await supabase
-        .from('customer_addresses')
-        .select('*')
-        .eq('customer_id', userId)
-        .order('is_default', { ascending: false });
-
-      if (addressError && addressError.code !== 'PGRST116') {
-        throw addressError;
+      // Fetch saved addresses from backend
+      let savedAddresses = [];
+      try {
+        const addrData = await api.get(`/customers/${userId}/addresses`);
+        savedAddresses = addrData.addresses || addrData || [];
+      } catch (addressError) {
+        console.warn('Could not fetch customer addresses:', addressError.message);
+        savedAddresses = [];
       }
 
-      // Fetch addresses from orders - handle case where shipping columns might not exist
+      // Fetch addresses from orders
       let orders = [];
       try {
-        const { data: orderData, error: orderError } = await supabase
-          .from('orders')
-          .select(`
-            id,
-            shipping_first_name,
-            shipping_last_name,
-            shipping_address,
-            shipping_city,
-            shipping_state,
-            shipping_postal_code,
-            shipping_country,
-            shipping_phone,
-            created_at
-          `)
-          .or(`user_id.eq.${userId},customer_id.eq.${userId}`)
-          .not('shipping_address', 'is', null)
-          .order('created_at', { ascending: false });
-
-        if (orderError) {
-          console.error('Error fetching order addresses:', orderError);
-          // If shipping columns don't exist, fall back to empty array
-          if (orderError.code === '42703') {
-            console.log('Shipping address columns do not exist in orders table yet');
-            orders = [];
-          } else {
-            throw orderError;
-          }
-        } else {
-          orders = orderData || [];
-        }
+        const orderData = await api.get(`/orders?userId=${userId}&limit=50`);
+        orders = (orderData.orders || orderData || []).filter(o => o.shipping_address);
       } catch (error) {
         console.error('Error in order address fetch:', error);
         orders = [];
@@ -429,15 +400,7 @@ const AddressManager = ({ userId }) => {
 
       if (editingAddress?.id && !editingAddress.from_order) {
         // Update existing address
-        const { error } = await supabase
-          .from('customer_addresses')
-          .update({
-            ...addressData,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', editingAddress.id);
-
-        if (error) throw error;
+        await api.put(`/customers/${userId}/addresses/${editingAddress.id}`, addressData);
 
         toast({
           title: "Success",
@@ -445,17 +408,10 @@ const AddressManager = ({ userId }) => {
         });
       } else {
         // Create new address
-        const { error } = await supabase
-          .from('customer_addresses')
-          .insert({
-            ...addressData,
-            customer_id: userId,
-            is_default: addresses.length === 0, // First address is default
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          });
-
-        if (error) throw error;
+        await api.post(`/customers/${userId}/addresses`, {
+          ...addressData,
+          is_default: addresses.length === 0,
+        });
 
         toast({
           title: "Success",
@@ -490,12 +446,7 @@ const AddressManager = ({ userId }) => {
     }
 
     try {
-      const { error } = await supabase
-        .from('customer_addresses')
-        .delete()
-        .eq('id', address.id);
-
-      if (error) throw error;
+      await api.delete(`/customers/${userId}/addresses/${address.id}`);
 
       toast({
         title: "Success",
@@ -533,19 +484,7 @@ const AddressManager = ({ userId }) => {
     }
 
     try {
-      // Remove default from all addresses
-      await supabase
-        .from('customer_addresses')
-        .update({ is_default: false })
-        .eq('customer_id', userId);
-
-      // Set new default
-      const { error } = await supabase
-        .from('customer_addresses')
-        .update({ is_default: true })
-        .eq('id', address.id);
-
-      if (error) throw error;
+      await api.put(`/customers/${userId}/addresses/${address.id}`, { is_default: true });
 
       toast({
         title: "Success",

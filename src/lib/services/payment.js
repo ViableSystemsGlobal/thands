@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/services/api';
 
 // Fetch payment settings from database via API
 export async function getPaymentConfig() {
@@ -210,43 +210,34 @@ export async function verifyPayment(reference) {
 // Update order payment status
 export async function updateOrderPaymentStatus(orderNumber, paymentData) {
   try {
-    const { error } = await supabase
-      .from('orders')
-      .update({
-        payment_status: 'paid',
-        payment_reference: paymentData.reference,
-        payment_gateway: 'paystack',
-        payment_completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      })
-      .eq('order_number', orderNumber);
-
-    if (error) throw error;
+    await api.put(`/orders/by-number/${orderNumber}/payment`, {
+      payment_status: 'paid',
+      payment_reference: paymentData.reference,
+      payment_gateway: 'paystack',
+      payment_completed_at: new Date().toISOString(),
+    });
 
     return { success: true };
   } catch (error) {
     console.error('Error updating payment status:', error);
-    throw error;
+    // Non-critical - log and continue
+    return { success: false, error: error.message };
   }
 }
 
 // Create payment record for tracking
 export async function createPaymentRecord(paymentData) {
   try {
-    const { error } = await supabase
-      .from('payment_logs')
-      .insert([{
-        order_number: paymentData.orderNumber,
-        payment_reference: paymentData.reference,
-        amount: paymentData.amount,
-        currency: paymentData.currency,
-        status: paymentData.status,
-        gateway: 'paystack',
-        gateway_response: paymentData.gatewayResponse,
-        created_at: new Date().toISOString()
-      }]);
+    await api.post('/payments/log', {
+      order_number: paymentData.orderNumber,
+      payment_reference: paymentData.reference,
+      amount: paymentData.amount,
+      currency: paymentData.currency,
+      status: paymentData.status,
+      gateway: 'paystack',
+      gateway_response: paymentData.gatewayResponse,
+    });
 
-    if (error) throw error;
     return { success: true };
   } catch (error) {
     console.error('Error creating payment record:', error);

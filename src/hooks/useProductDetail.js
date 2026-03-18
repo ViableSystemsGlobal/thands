@@ -1,7 +1,6 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '@/lib/supabase';
+import { api } from '@/lib/services/api';
 import { useToast } from '@/components/ui/use-toast';
 import { fetchGeneralFAQs } from '@/lib/db/faqs';
 import { useShop } from '@/context/ShopContext';
@@ -20,34 +19,26 @@ export const useProductDetail = () => {
   const [generalFAQs, setGeneralFAQs] = useState([]);
   const [productLoading, setProductLoading] = useState(true);
   const [faqsLoading, setFaqsLoading] = useState(true);
-  
+
   const currentProductIsInWishlist = product ? isProductInWishlist(product.id) : false;
 
   const fetchProductAndFAQsData = useCallback(async () => {
     setProductLoading(true);
     setFaqsLoading(true);
-    
-    let productFetchError = null;
 
     try {
-      const { data: productData, error: pError } = await supabase
-        .from('products')
-        .select('*, product_sizes (*)')
-        .eq('id', productId)
-        .single();
+      const data = await api.get(`/products/${productId}`);
+      const productData = data.product || data;
 
-      if (pError) {
-        productFetchError = pError;
-        if (pError.code === 'PGRST116') throw new Error("Product not found");
-        throw pError;
+      if (!productData || !productData.id) {
+        throw new Error("Product not found");
       }
-      if (!productData) throw new Error("Product not found");
 
       setProduct(productData);
       setSizes(productData.product_sizes || []);
       const defaultSize = productData.product_sizes?.find(s => s.size === 'M') || productData.product_sizes?.[0];
       if (defaultSize) {
-        setSelectedSize(defaultSize); 
+        setSelectedSize(defaultSize);
         setCurrentPrice(defaultSize.price);
       } else if (productData.product_sizes && productData.product_sizes.length > 0) {
         setSelectedSize(null);
@@ -64,9 +55,7 @@ export const useProductDetail = () => {
       });
       setProduct(null);
       if (error.message !== "Product not found") {
-         if (!productFetchError || productFetchError.code !== 'PGRST116') {
-            navigate('/shop');
-        }
+        navigate('/shop');
       }
     } finally {
       setProductLoading(false);
@@ -79,7 +68,7 @@ export const useProductDetail = () => {
         toast({
           title: "Could not load FAQs",
           description: "There was an issue loading FAQs at this time. " + faqsError.message,
-          variant: "default", 
+          variant: "default",
         });
         setGeneralFAQs([]);
       } else {
@@ -88,11 +77,11 @@ export const useProductDetail = () => {
     } catch (faqFetchError) {
       console.error("Exception during FAQ fetch:", faqFetchError.message);
       setGeneralFAQs([]);
-       toast({
-          title: "FAQ Loading Issue",
-          description: "There was an issue loading FAQs: " + faqFetchError.message,
-          variant: "default", 
-        });
+      toast({
+        title: "FAQ Loading Issue",
+        description: "There was an issue loading FAQs: " + faqFetchError.message,
+        variant: "default",
+      });
     } finally {
       setFaqsLoading(false);
     }
@@ -101,14 +90,11 @@ export const useProductDetail = () => {
   const fetchRelatedProductsData = useCallback(async (currentProduct) => {
     if (!currentProduct || !currentProduct.category) return;
     try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('*, product_sizes (*)')
-        .eq('category', currentProduct.category)
-        .neq('id', currentProduct.id)
-        .limit(4);
-      if (error) throw error;
-      setRelatedProducts(data || []);
+      const data = await api.get(`/products?category=${encodeURIComponent(currentProduct.category)}&limit=5`);
+      const all = data.products || data || [];
+      // Exclude the current product
+      const related = all.filter(p => p.id !== currentProduct.id).slice(0, 4);
+      setRelatedProducts(related);
     } catch (error) {
       console.error("Error fetching related products:", error.message);
     }
@@ -168,7 +154,7 @@ export const useProductDetail = () => {
     currentPrice,
     relatedProducts,
     generalFAQs,
-    loading: productLoading || faqsLoading, 
+    loading: productLoading || faqsLoading,
     productLoading,
     faqsLoading,
     handleSizeSelect,
