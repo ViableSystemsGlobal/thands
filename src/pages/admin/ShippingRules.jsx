@@ -26,10 +26,11 @@ const ShippingRules = () => {
         max_amount: rule.max_order_value,
         shipping_fee: rule.shipping_cost,
         per_kg_rate: rule.per_kg_rate,
-        delivery_time: rule.estimated_days_min && rule.estimated_days_max 
-          ? `${rule.estimated_days_min}-${rule.estimated_days_max}` 
+        delivery_time: rule.estimated_days_min && rule.estimated_days_max
+          ? `${rule.estimated_days_min}-${rule.estimated_days_max}`
           : null,
-        carrier: null // Not in backend schema
+        carrier: null, // Not in backend schema
+        suppress_dhl: rule.suppress_dhl || false,
       }));
       setRules(mappedRules);
     } catch (error) {
@@ -60,6 +61,7 @@ const ShippingRules = () => {
         estimated_days_min: formData.delivery_time ? parseInt(formData.delivery_time.split('-')[0]) : null,
         estimated_days_max: formData.delivery_time ? parseInt(formData.delivery_time.split('-')[1]) : null,
         is_active: formData.is_active !== undefined ? formData.is_active : true,
+        suppress_dhl: formData.suppress_dhl || false,
       };
 
       let response;

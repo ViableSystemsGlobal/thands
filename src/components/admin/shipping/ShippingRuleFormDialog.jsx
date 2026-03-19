@@ -25,6 +25,7 @@ const initialFormData = {
   delivery_time: "",
   carrier: "",
   is_active: true,
+  suppress_dhl: false,
 };
 
 // Simple inline country selector component
@@ -182,6 +183,7 @@ const ShippingRuleFormDialog = ({ isOpen, onOpenChange, onSubmit, initialData, o
         delivery_time: initialData.delivery_time || "",
         carrier: initialData.carrier || "",
         is_active: initialData.is_active !== undefined ? initialData.is_active : true,
+        suppress_dhl: initialData.suppress_dhl || false,
       });
     } else {
       setFormData(initialFormData);
@@ -395,6 +397,25 @@ const ShippingRuleFormDialog = ({ isOpen, onOpenChange, onSubmit, initialData, o
               className="rounded"
             />
             <Label htmlFor="is_active" className="font-medium text-gray-700">Active</Label>
+          </div>
+
+          <div className="flex items-start space-x-2 p-3 bg-orange-50 border border-orange-200 rounded-md">
+            <input
+              type="checkbox"
+              id="suppress_dhl"
+              name="suppress_dhl"
+              checked={formData.suppress_dhl}
+              onChange={handleInputChange}
+              className="rounded mt-0.5"
+            />
+            <div>
+              <Label htmlFor="suppress_dhl" className="font-medium text-gray-700 cursor-pointer">
+                Suppress DHL for this region
+              </Label>
+              <p className="text-xs text-gray-500 mt-0.5">
+                When enabled, DHL rates will not be shown for destinations matching this rule's country/state. Only this manual rate will appear.
+              </p>
+            </div>
           </div>
         </form>
 

@@ -67,16 +67,23 @@ const ShippingRulesTable = ({ rules, onEdit, onDelete }) => {
               <TableCell className="px-6 py-4 whitespace-nowrap text-sm text-slate-700">{rule.delivery_time || "N/A"}</TableCell>
               <TableCell className="px-6 py-4 whitespace-nowrap text-sm text-slate-700">{rule.carrier || "N/A"}</TableCell>
               <TableCell className="px-6 py-4 whitespace-nowrap">
-                <Badge
-                  variant={rule.is_active ? "success" : "destructive"}
-                  className={`capitalize text-xs px-2.5 py-1 rounded-full font-medium ${
-                    rule.is_active
-                      ? "bg-green-100 text-green-700 border border-green-300"
-                      : "bg-red-100 text-red-700 border border-red-300"
-                  }`}
-                >
-                  {rule.is_active ? "Active" : "Inactive"}
-                </Badge>
+                <div className="flex flex-col gap-1">
+                  <Badge
+                    variant={rule.is_active ? "success" : "destructive"}
+                    className={`capitalize text-xs px-2.5 py-1 rounded-full font-medium ${
+                      rule.is_active
+                        ? "bg-green-100 text-green-700 border border-green-300"
+                        : "bg-red-100 text-red-700 border border-red-300"
+                    }`}
+                  >
+                    {rule.is_active ? "Active" : "Inactive"}
+                  </Badge>
+                  {rule.suppress_dhl && (
+                    <Badge className="text-xs px-2.5 py-1 rounded-full font-medium bg-orange-100 text-orange-700 border border-orange-300">
+                      No DHL
+                    </Badge>
+                  )}
+                </div>
               </TableCell>
               <TableCell className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                 <Button

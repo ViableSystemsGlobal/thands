@@ -218,8 +218,31 @@ router.post('/rates', async (req, res) => {
       return details;
     };
 
-    // Try DHL first if configured
-    if (dhlService.isConfigured()) {
+    // Check if any shipping rule suppresses DHL for this destination
+    const suppressCheck = await query(`
+      SELECT id, name FROM shipping_rules
+      WHERE is_active = true
+        AND suppress_dhl = true
+        AND LOWER(TRIM(country)) = LOWER($1)
+        AND (
+          state IS NULL OR TRIM(state) = ''
+          OR LOWER(TRIM(state)) = LOWER($2)
+          OR LOWER(TRIM(state)) = LOWER($3)
+        )
+      LIMIT 1
+    `, [
+      normalizedAddress.country,
+      normalizedAddress.state || '',
+      normalizedAddress.city || ''
+    ]);
+
+    if (suppressCheck.rows.length > 0) {
+      console.log(`🚫 DHL suppressed for this destination by rule: "${suppressCheck.rows[0].name}"`);
+      useManualShipping = true;
+    }
+
+    // Try DHL first if configured and not suppressed
+    if (!useManualShipping && dhlService.isConfigured()) {
       try {
         if (orderId) {
           // Get order details
@@ -301,17 +324,23 @@ router.post('/rates', async (req, res) => {
         console.log('⚖️ Total cart weight:', totalWeight, 'kg');
         
         // Fetch shipping rules from database
+        // Prioritise: state/city match > country-only match > international
         const rulesResult = await query(`
-          SELECT id, name, country, shipping_cost, per_kg_rate, free_shipping_threshold, 
+          SELECT id, name, country, state, shipping_cost, per_kg_rate, free_shipping_threshold,
                  estimated_days_min, estimated_days_max, is_active
-          FROM shipping_rules 
-          WHERE is_active = true 
+          FROM shipping_rules
+          WHERE is_active = true
             AND (LOWER(TRIM(country)) = LOWER($1) OR country IS NULL OR TRIM(country) = '')
-          ORDER BY 
+          ORDER BY
             CASE WHEN LOWER(TRIM(country)) = LOWER($1) THEN 1 ELSE 2 END,
+            CASE
+              WHEN state IS NOT NULL AND TRIM(state) != ''
+                AND (LOWER(TRIM(state)) = LOWER($2) OR LOWER(TRIM(state)) = LOWER($3))
+              THEN 0 ELSE 1
+            END,
             shipping_cost ASC
           LIMIT 5
-        `, [normalizedAddress.country]);
+        `, [normalizedAddress.country, normalizedAddress.state || '', normalizedAddress.city || '']);
         
         // If no country-specific rule, try any rule with empty/international country
         let rules = rulesResult.rows;
@@ -1053,18 +1082,19 @@ async function calculateParcelDimensions(orderId) {
  */
 router.post('/', authenticateToken, async (req, res) => {
   try {
-    const { 
-      name, 
-      country, 
-      state, 
-      shipping_cost, 
+    const {
+      name,
+      country,
+      state,
+      shipping_cost,
       per_kg_rate,
       free_shipping_threshold,
       estimated_days_min,
       estimated_days_max,
       min_order_value,
       max_order_value,
-      is_active = true 
+      is_active = true,
+      suppress_dhl = false
     } = req.body;
 
     if (!name) {
@@ -1074,13 +1104,13 @@ router.post('/', authenticateToken, async (req, res) => {
     const result = await query(`
       INSERT INTO shipping_rules (
         name, country, state, shipping_cost, per_kg_rate, free_shipping_threshold,
-        estimated_days_min, estimated_days_max, min_order_value, max_order_value, is_active
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        estimated_days_min, estimated_days_max, min_order_value, max_order_value, is_active, suppress_dhl
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *
     `, [
-      name, 
-      country || null, 
-      state || null, 
+      name,
+      country || null,
+      state || null,
       shipping_cost || 0,
       per_kg_rate || 0,
       free_shipping_threshold || null,
@@ -1088,7 +1118,8 @@ router.post('/', authenticateToken, async (req, res) => {
       estimated_days_max || null,
       min_order_value || null,
       max_order_value || null,
-      is_active
+      is_active,
+      suppress_dhl
     ]);
     
     res.status(201).json({ success: true, data: result.rows[0] });
@@ -1131,10 +1162,10 @@ router.get('/:id', async (req, res) => {
 router.put('/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { 
-      name, 
-      country, 
-      state, 
+    const {
+      name,
+      country,
+      state,
       shipping_cost,
       per_kg_rate,
       free_shipping_threshold,
@@ -1142,7 +1173,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
       estimated_days_max,
       min_order_value,
       max_order_value,
-      is_active 
+      is_active,
+      suppress_dhl
     } = req.body;
 
     const result = await query(`
@@ -1158,8 +1190,9 @@ router.put('/:id', authenticateToken, async (req, res) => {
         min_order_value = $9,
         max_order_value = $10,
         is_active = COALESCE($11, is_active),
+        suppress_dhl = COALESCE($12, suppress_dhl),
         updated_at = NOW()
-      WHERE id = $12
+      WHERE id = $13
       RETURNING *
     `, [
       name,
@@ -1173,6 +1206,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
       min_order_value || null,
       max_order_value || null,
       is_active,
+      suppress_dhl !== undefined ? suppress_dhl : null,
       id
     ]);
     
