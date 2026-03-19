@@ -8,6 +8,8 @@ export const initialConsultationFormData = {
   whatsappPhone: "",
   type: "", // 'design' or 'booking'
   height: "",
+  size: "",
+  measurementsConfirmed: false,
   designs: [],
   photos: [],
   additionalInstructions: "",
@@ -48,6 +50,7 @@ export const handleConsultationSubmit = async (formData, toast, resetForm, recap
       height: formData.type === "design" ? formData.height : null,
       design_urls: designUrls.length > 0 ? designUrls : null,
       photo_urls: photoUrls.length > 0 ? photoUrls : null,
+      size: formData.type === "design" ? (formData.size || null) : null,
       additional_instructions: formData.type === "design" ? formData.additionalInstructions : null,
       preferred_date: formData.type === "booking" ? formData.preferredDate : null,
       preferred_time: formData.type === "booking" ? formData.preferredTime : null,
@@ -92,7 +95,7 @@ export const validateConsultationStep = (step, formData) => {
       return formData.type !== "";
     case 4:
       if (formData.type === "design") {
-        return formData.height.trim() !== "";
+        return formData.height.trim() !== "" && formData.measurementsConfirmed === true;
       } else if (formData.type === "booking") {
         return formData.preferredDate !== "" && formData.preferredTime !== "" && formData.consultationType !== "";
       }
