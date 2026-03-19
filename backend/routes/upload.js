@@ -5,6 +5,38 @@ const { query } = require('../config/database');
 
 const router = express.Router();
 
+// Upload order customer photo (public - no auth required)
+router.post('/order-photo', upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file provided' });
+    }
+
+    if (!validateMagicBytes(req.file.buffer)) {
+      return res.status(400).json({ error: 'Invalid image file' });
+    }
+
+    const processedImage = await processImage(
+      req.file.buffer,
+      req.file.originalname,
+      'product'
+    );
+
+    const baseUrl = process.env.RENDER_EXTERNAL_URL || `${req.protocol}://${req.get('host')}`;
+    const imageUrl = `${baseUrl}${processedImage.processedImages.original.url}`;
+
+    res.json({
+      success: true,
+      url: imageUrl,
+      message: 'Photo uploaded successfully'
+    });
+
+  } catch (error) {
+    console.error('Order photo upload error:', error);
+    res.status(500).json({ error: error.message || 'Upload failed' });
+  }
+});
+
 // Upload single image
 router.post('/single', authenticateToken, upload.single('image'), async (req, res) => {
   try {

@@ -422,6 +422,24 @@ const OrderDetail = () => {
         <TabsContent value="info">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
+            {/* Customer Photo */}
+            {order.customer_photo_url && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    Customer Photo
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <img
+                    src={order.customer_photo_url}
+                    alt="Customer photo"
+                    className="w-40 h-52 object-cover rounded-lg border"
+                  />
+                </CardContent>
+              </Card>
+            )}
+
             {/* Items */}
             <Card>
               <CardHeader>

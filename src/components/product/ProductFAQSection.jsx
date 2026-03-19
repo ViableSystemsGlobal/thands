@@ -38,9 +38,12 @@ const ProductFAQItem = ({ faq }) => {
 };
 
 
-const ProductFAQSection = ({ faqs }) => {
+const ProductFAQSection = ({ faqs, loading }) => {
+  if (loading) {
+    return <p className="text-gray-500 text-sm">Loading FAQs...</p>;
+  }
   if (!faqs || faqs.length === 0) {
-    return null;
+    return <p className="text-gray-500 text-sm">No FAQs available for this product.</p>;
   }
 
   return (

@@ -159,6 +159,18 @@ const GiftVoucherCard = ({
         </div>
         <div>
           <Label className="text-sm font-medium text-gray-700 flex items-center">
+            <Phone className="w-4 h-4 mr-2" /> Recipient's Phone (Optional)
+          </Label>
+          <Input
+            type="tel"
+            placeholder="e.g., +1234567890"
+            value={recipientDetails?.phone || ''}
+            onChange={(e) => onRecipientDetailChange(voucher.id, 'phone', e.target.value)}
+            className="mt-1"
+          />
+        </div>
+        <div>
+          <Label className="text-sm font-medium text-gray-700 flex items-center">
             <Send className="w-4 h-4 mr-2" /> Personal Message (Optional)
           </Label>
           <Input

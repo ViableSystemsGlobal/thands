@@ -148,6 +148,7 @@ const ConsultationPage = () => {
               handleRecaptchaChange={handleRecaptchaChange}
               handleRecaptchaError={handleRecaptchaError}
               recaptchaToken={recaptchaToken}
+              captchaEnabled={settings.captchaEnabled}
             />
           )}
         </AnimatePresence>

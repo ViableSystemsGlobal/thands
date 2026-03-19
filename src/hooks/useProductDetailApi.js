@@ -85,11 +85,13 @@ export const useProductDetailApi = () => {
       setProductLoading(false);
     }
 
-    // Fetch FAQs
+    // Fetch FAQs for this product
     try {
-      // const faqs = await fetchGeneralFAQs(); // Temporarily disabled
-      const faqs = []; // Empty array for now
-      setGeneralFAQs(faqs || []);
+      const [productFaqs, generalFaqs] = await Promise.all([
+        api.get(`/faqs/product/${productId}`).catch(() => []),
+        api.get('/faqs/general').catch(() => []),
+      ]);
+      setGeneralFAQs([...(productFaqs || []), ...(generalFaqs || [])]);
     } catch (faqError) {
       console.error("Error fetching FAQs:", faqError);
       setGeneralFAQs([]);
@@ -124,10 +126,6 @@ export const useProductDetailApi = () => {
 
     try {
       await addToCart(product, selectedSizeForCart);
-      toast({ 
-        title: "Added to Cart", 
-        description: `${product.name} (${selectedSizeForCart.size}) added successfully.` 
-      });
     } catch (error) {
       console.error("Error adding to cart:", error);
       toast({ 

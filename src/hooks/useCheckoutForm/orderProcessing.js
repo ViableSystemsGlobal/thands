@@ -55,6 +55,7 @@ export const useOrderProcessing = (
         shipping_phone: formData.phone,
         shipping_email: formData.email,
         notes: formData.orderNotes,
+        customer_photo_url: formData.customerPhotoUrl || null,
         payment_reference: paymentDetails.reference,
         payment_gateway: 'paystack',
         payment_completed_at: new Date().toISOString(),
@@ -288,6 +289,7 @@ export const useOrderProcessing = (
         shipping_phone: formData.phone,
         shipping_email: formData.email,
         notes: formData.orderNotes,
+        customer_photo_url: formData.customerPhotoUrl || null,
         items: cart.map(item => ({
           product_id: item.product_id || item.products?.id || null,
           gift_voucher_type_id: item.gift_voucher_type_id || null,

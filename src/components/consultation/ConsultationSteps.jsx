@@ -6,20 +6,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import RecaptchaComponent from "@/components/ui/recaptcha";
 
-const ConsultationSteps = ({ 
-  step, 
-  steps, 
-  formData, 
-  setFormData, 
-  onNext, 
-  onBack, 
-  onSubmit, 
-  isSubmitting, 
+const ConsultationSteps = ({
+  step,
+  steps,
+  formData,
+  setFormData,
+  onNext,
+  onBack,
+  onSubmit,
+  isSubmitting,
   canProceed,
   recaptchaRef,
   handleRecaptchaChange,
   handleRecaptchaError,
-  recaptchaToken
+  recaptchaToken,
+  captchaEnabled = false
 }) => {
   return (
     <motion.div
@@ -85,7 +86,7 @@ const ConsultationSteps = ({
         ) : (
           <Button
             onClick={onSubmit}
-            disabled={isSubmitting || !canProceed() || !recaptchaToken}
+            disabled={isSubmitting || !canProceed() || (captchaEnabled && !recaptchaToken)}
             className="flex-1"
           >
             {isSubmitting ? "Submitting..." : "Submit"}

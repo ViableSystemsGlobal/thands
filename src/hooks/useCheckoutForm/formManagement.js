@@ -295,6 +295,10 @@ export const useFormManagement = (
       errors.country = "Please select a country for shipping calculation.";
     }
 
+    if (!currentFormData.measurementsConfirmed) {
+      errors.measurementsConfirmed = "Please confirm you have reviewed the measurements guide.";
+    }
+
     if (currentCreateAccount && !authCustomer && (!currentPassword || currentPassword.length < 6)) {
       errors.password = "Password must be at least 6 characters long";
     }

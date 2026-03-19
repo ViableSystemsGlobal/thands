@@ -114,10 +114,9 @@ const ProductDetailLayout = ({
                 Product FAQs
               </AccordionTrigger>
               <AccordionContent className="py-4">
-                <ProductFAQSection 
-                  productId={product.id} 
-                  generalFAQs={generalFAQs} 
-                  loading={faqsLoading} 
+                <ProductFAQSection
+                  faqs={generalFAQs}
+                  loading={faqsLoading}
                 />
               </AccordionContent>
             </AccordionItem>

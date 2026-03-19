@@ -140,7 +140,7 @@ const ProductInfo = ({ product, sizes, selectedSize, currentPrice, onSizeSelect,
       <div className="grid grid-cols-[1fr,auto] gap-4 pt-4">
         <Button
           className="bg-[#D2B48C] hover:bg-[#C19A6B] text-white py-3 text-base rounded-md"
-          onClick={onAddToCart}
+          onClick={() => onAddToCart()}
           disabled={(sizes && sizes.length > 0 && !selectedSize) || !product}
         >
           Add to Cart

@@ -163,6 +163,17 @@ const OrderDetails = () => {
               </div>
             </div>
 
+            {order.customer_photo_url && (
+              <div className="mt-6 pt-6 border-t">
+                <h2 className="text-lg font-medium mb-4">Customer Photo</h2>
+                <img
+                  src={order.customer_photo_url}
+                  alt="Customer photo"
+                  className="w-40 h-52 object-cover rounded-lg border"
+                />
+              </div>
+            )}
+
             <div>
               <h2 className="text-lg font-medium mb-4">Shipping Details</h2>
               <div className="bg-gray-50 rounded-lg p-4">

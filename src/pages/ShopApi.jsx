@@ -64,7 +64,6 @@ const ShopApi = () => {
       setIsAddingToCart(true);
       try {
         await addToCart(selectedProductForDialog, size);
-        toast({ title: "Added to Cart", description: `${selectedProductForDialog.name} (${size.size}) added successfully.` });
         setIsSizeDialogOpen(false);
       } catch (error) {
         console.error("Error adding to cart:", error);

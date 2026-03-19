@@ -204,6 +204,7 @@ router.post('/', [
       voucher_code,
       voucher_discount = 0,
       notes,
+      customer_photo_url,
       items = []
     } = req.body;
 
@@ -220,8 +221,8 @@ router.post('/', [
           shipping_city, shipping_state, shipping_postal_code, shipping_country,
           billing_email, billing_first_name, billing_last_name, billing_address,
           billing_city, billing_state, billing_postal_code, billing_country,
-          voucher_code, voucher_discount, notes, branch_code
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34)
+          voucher_code, voucher_discount, notes, branch_code, customer_photo_url
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35)
         RETURNING *`,
         [
           order_number, customer_id, user_id, status, payment_status, payment_method, payment_reference,
@@ -230,7 +231,7 @@ router.post('/', [
           shipping_city, shipping_state, shipping_postal_code, shipping_country,
           billing_email, billing_first_name, billing_last_name, billing_address,
           billing_city, billing_state, billing_postal_code, billing_country,
-          voucher_code, voucher_discount, notes, branchCode
+          voucher_code, voucher_discount, notes, branchCode, customer_photo_url || null
         ]
       );
 
