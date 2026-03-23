@@ -42,15 +42,24 @@ router.post('/register', [
     const saltRounds = 12;
     const passwordHash = await bcrypt.hash(password, saltRounds);
 
-    // Create user
+    // Create user (users table has full_name, not first_name/last_name)
+    const fullName = `${firstName} ${lastName}`.trim();
     const result = await query(
-      `INSERT INTO users (email, password_hash, first_name, last_name, phone, email_verified)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, email, first_name, last_name, role, created_at`,
-      [email, passwordHash, firstName, lastName, phone || null, false]
+      `INSERT INTO users (email, password_hash, full_name, email_verified)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, email, full_name, role, created_at`,
+      [email, passwordHash, fullName, false]
     );
 
     const user = result.rows[0];
+
+    // Create profile with first/last name and phone
+    await query(
+      `INSERT INTO profiles (user_id, first_name, last_name, phone)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (user_id) DO NOTHING`,
+      [user.id, firstName, lastName, phone || null]
+    );
 
     // Generate token
     const token = generateToken(user.id);
@@ -60,8 +69,8 @@ router.post('/register', [
       user: {
         id: user.id,
         email: user.email,
-        firstName: user.first_name,
-        lastName: user.last_name,
+        firstName: firstName,
+        lastName: lastName,
         role: user.role,
         createdAt: user.created_at
       },

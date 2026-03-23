@@ -32,7 +32,7 @@ export const useSettings = () => {
   const fetchSettings = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await api.get('/admin/settings');
+      const response = await api.get('/admin/settings/public');
 
       if (!response.success) {
         console.error('Error fetching settings:', response.error);
@@ -52,7 +52,7 @@ export const useSettings = () => {
           paystackPublicKey: data.paystack_public_key || '',
           paystackSecretKey: data.paystack_secret_key || '', 
           exchangeRateGHS: data.exchange_rate_ghs ? Number(data.exchange_rate_ghs) : initialSettings.exchangeRateGHS,
-          captchaEnabled: data.recaptcha_enabled || initialSettings.captchaEnabled,
+          captchaEnabled: data.captcha_enabled || data.recaptcha_enabled || initialSettings.captchaEnabled,
           favicon_url: data.favicon_url || initialSettings.favicon_url,
           navbar_logo_url: data.navbar_logo_url || initialSettings.navbar_logo_url,
           footer_logo_url: data.footer_logo_url || initialSettings.footer_logo_url,

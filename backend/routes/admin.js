@@ -219,6 +219,48 @@ function stripSecrets(settings) {
   return safe;
 }
 
+// Public settings endpoint — returns only display settings (no auth required)
+router.get('/settings/public', async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT store_name, contact_email, contact_phone, address, store_description,
+             currency, timezone, exchange_rate_ghs, exchange_rate_gbp,
+             hero_image_url, hero_title, hero_subtitle, hero_button_text,
+             favicon_url, navbar_logo_url, footer_logo_url,
+             captcha_enabled, paystack_public_key
+      FROM settings LIMIT 1
+    `);
+
+    if (result.rows.length === 0) {
+      return res.json({
+        success: true,
+        settings: {
+          store_name: 'Tailored Hands',
+          contact_email: 'hello@tailoredhands.africa',
+          contact_phone: '+233 24 532 7668',
+          exchange_rate_ghs: 16.0,
+          exchange_rate_gbp: 0.79,
+          hero_image_url: '',
+          hero_title: 'Modern Elegance Redefined',
+          hero_subtitle: 'Discover our collection of meticulously crafted African-inspired pieces.',
+          hero_button_text: 'EXPLORE COLLECTION',
+          favicon_url: '',
+          navbar_logo_url: '',
+          footer_logo_url: '',
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      settings: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Error fetching public settings:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch settings' });
+  }
+});
+
 // Get all settings (authenticated — secrets stripped from response)
 router.get('/settings', authenticateToken, async (req, res) => {
   try {
@@ -378,7 +420,7 @@ router.put('/settings', authenticateToken, async (req, res) => {
 });
 
 // GET /api/admin/users - Get admin users
-router.get('/users', async (req, res) => {
+router.get('/users', authenticateToken, async (req, res) => {
   try {
     const result = await query(
       `SELECT id, email, full_name, role, created_at 
@@ -394,7 +436,7 @@ router.get('/users', async (req, res) => {
 });
 
 // POST /api/admin/users - Create new admin user
-router.post('/users', async (req, res) => {
+router.post('/users', authenticateToken, async (req, res) => {
   try {
     const { email, full_name, role } = req.body;
     
@@ -426,7 +468,7 @@ router.post('/users', async (req, res) => {
 });
 
 // DELETE /api/admin/users/:id - Delete admin user
-router.delete('/users/:id', async (req, res) => {
+router.delete('/users/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -450,7 +492,7 @@ router.delete('/users/:id', async (req, res) => {
 });
 
 // PUT /api/admin/users/:id/password - Update user password
-router.put('/users/:id/password', async (req, res) => {
+router.put('/users/:id/password', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const { newPassword } = req.body;

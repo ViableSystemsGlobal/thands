@@ -5,12 +5,6 @@ const DynamicFavicon = () => {
   const { settings, loading } = useSettings();
 
   useEffect(() => {
-    // Remove default favicon immediately, even while loading
-    const defaultFavicon = document.getElementById('default-favicon');
-    if (defaultFavicon) {
-      defaultFavicon.remove();
-    }
-    
     if (loading) return;
     
     // Remove all existing favicon links first

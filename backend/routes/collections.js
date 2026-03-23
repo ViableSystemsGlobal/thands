@@ -3,6 +3,27 @@ const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 const { query } = require('../config/database');
 
+// Public endpoint to get active collections for homepage
+// MUST be before /:id to avoid route conflict
+router.get('/public/active', async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT id, name, description, search_terms, image_url, slug
+      FROM collections
+      WHERE is_active = true
+      ORDER BY created_at ASC
+    `);
+
+    res.json({
+      success: true,
+      data: result.rows
+    });
+  } catch (error) {
+    console.error('Error fetching public collections:', error);
+    res.status(500).json({ error: 'Failed to fetch collections' });
+  }
+});
+
 // Get collections
 router.get('/', authenticateToken, async (req, res) => {
   try {
@@ -13,7 +34,7 @@ router.get('/', authenticateToken, async (req, res) => {
 
     const result = await query(`
       SELECT id, name, description, search_terms, image_url, is_active, slug, created_at, updated_at
-      FROM collections 
+      FROM collections
       ORDER BY created_at ASC
     `);
 
@@ -78,9 +99,9 @@ router.post('/', authenticateToken, async (req, res) => {
     }
   } catch (error) {
     console.error('Error saving collections:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to save collections',
-      details: error.message 
+      details: error.message
     });
   }
 });
@@ -96,7 +117,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const result = await query(`
       SELECT id, name, description, search_terms, image_url, is_active, slug, created_at, updated_at
-      FROM collections 
+      FROM collections
       WHERE id = $1
     `, [id]);
 
@@ -130,7 +151,7 @@ router.put('/:id', authenticateToken, async (req, res) => {
     }
 
     const result = await query(`
-      UPDATE collections 
+      UPDATE collections
       SET name = $1, description = $2, search_terms = $3, image_url = $4, is_active = $5, updated_at = NOW()
       WHERE id = $6
       RETURNING *
@@ -173,26 +194,6 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error deleting collection:', error);
     res.status(500).json({ error: 'Failed to delete collection' });
-  }
-});
-
-// Public endpoint to get active collections for homepage
-router.get('/public/active', async (req, res) => {
-  try {
-    const result = await query(`
-      SELECT id, name, description, search_terms, image_url, slug
-      FROM collections 
-      WHERE is_active = true
-      ORDER BY created_at ASC
-    `);
-
-    res.json({
-      success: true,
-      data: result.rows
-    });
-  } catch (error) {
-    console.error('Error fetching public collections:', error);
-    res.status(500).json({ error: 'Failed to fetch collections' });
   }
 });
 
