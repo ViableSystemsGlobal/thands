@@ -10,11 +10,6 @@ const RecaptchaComponent = forwardRef(({ onChange, onError, theme = 'light', siz
   const siteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
   const { settings } = useSettings();
 
-  // If captcha is disabled in settings, don't render anything
-  if (!settings.captchaEnabled) {
-    return null;
-  }
-
   useEffect(() => {
     // Check if reCAPTCHA is properly configured
     if (!siteKey || siteKey === 'your-recaptcha-site-key-here') {
@@ -75,6 +70,12 @@ const RecaptchaComponent = forwardRef(({ onChange, onError, theme = 'light', siz
       }
     }
   }));
+
+  // If captcha is disabled in settings, don't render anything
+  // (must be after all hooks to satisfy Rules of Hooks)
+  if (!settings.captchaEnabled) {
+    return null;
+  }
 
   const handleError = (error) => {
     console.error('reCAPTCHA error:', error);
