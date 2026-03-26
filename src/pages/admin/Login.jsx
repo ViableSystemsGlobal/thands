@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { Button } from '@/components/ui/button';
@@ -7,18 +7,12 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/components/ui/use-toast';
 import { Eye, EyeOff, LogIn, Mail, KeyRound } from 'lucide-react';
-import RecaptchaComponent from '@/components/ui/recaptcha';
-import { useSettings } from '@/hooks/useSettings';
 
 const AdminLoginPage = () => {
-  const { settings } = useSettings();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false); // Local submitting state for button
-  const [recaptchaToken, setRecaptchaToken] = useState(null);
-  const [recaptchaError, setRecaptchaError] = useState('');
-  const recaptchaRef = useRef(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { login, isAuthenticated, loading, user } = useAdminAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -41,46 +35,22 @@ const AdminLoginPage = () => {
     }
   }, [isAuthenticated, user, navigate, from]);
 
-  const handleRecaptchaChange = (token) => {
-    setRecaptchaToken(token);
-    setRecaptchaError('');
-  };
-
-  const handleRecaptchaError = (error) => {
-    console.error('reCAPTCHA error:', error);
-    setRecaptchaToken(null);
-    setRecaptchaError('reCAPTCHA verification failed. Please try again.');
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!email || !password) {
       toast({ title: "Login Error", description: "Email and password are required.", variant: "destructive" });
       return;
     }
-    
-    if (settings.captchaEnabled && !recaptchaToken) {
-      setRecaptchaError('Please complete the reCAPTCHA verification.');
-      return;
-    }
-    
+
     setIsSubmitting(true);
     try {
       await login(email, password);
-      // Navigation is handled by the useEffect above based on auth state changes
     } catch (error) {
       console.error("AdminLoginPage:handleSubmit - Login error:", error);
-      
-      // Reset reCAPTCHA on error
-      if (recaptchaRef.current) {
-        recaptchaRef.current.reset();
-      }
-      setRecaptchaToken(null);
-      
-      toast({ 
-        title: "Login Failed", 
-        description: error.message || "Invalid credentials or an unknown error occurred.", 
-        variant: "destructive" 
+      toast({
+        title: "Login Failed",
+        description: error.message || "Invalid credentials or an unknown error occurred.",
+        variant: "destructive"
       });
     } finally {
       setIsSubmitting(false);
@@ -167,22 +137,10 @@ const AdminLoginPage = () => {
               </div>
             </div>
             
-            {/* reCAPTCHA */}
-            <div>
-              <RecaptchaComponent
-                ref={recaptchaRef}
-                onChange={handleRecaptchaChange}
-                onError={handleRecaptchaError}
-                theme="dark"
-                className="mt-2"
-              />
-              {recaptchaError && <p className="text-sm text-red-400 mt-1">{recaptchaError}</p>}
-            </div>
-            
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               className="w-full bg-sky-600 hover:bg-sky-500 text-white font-semibold py-3 transition-all duration-300 ease-in-out transform hover:scale-105 flex items-center justify-center"
-              disabled={isSubmitting || loading || (settings.captchaEnabled && !recaptchaToken)}
+              disabled={isSubmitting || loading}
             >
               {isSubmitting || loading ? (
                 <>

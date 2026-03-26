@@ -1,5 +1,5 @@
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { MapPin, Phone, Mail, Clock } from "lucide-react";
@@ -13,7 +13,6 @@ const Contact = () => {
   const { settings } = useSettings();
   const [recaptchaToken, setRecaptchaToken] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const recaptchaRef = useRef(null);
   const [storeInfo, setStoreInfo] = useState({
     storeName: "Tailored Hands",
     email: "hello@tailoredhands.africa",
@@ -94,11 +93,8 @@ const Contact = () => {
         description: "We'll get back to you as soon as possible.",
       });
 
-      // Reset form and reCAPTCHA
+      // Reset form
       e.target.reset();
-      if (recaptchaRef.current) {
-        recaptchaRef.current.reset();
-      }
       setRecaptchaToken(null);
     } catch (error) {
       console.error('Error sending message:', error);
@@ -108,10 +104,6 @@ const Contact = () => {
         variant: "destructive"
       });
       
-      // Reset reCAPTCHA on error
-      if (recaptchaRef.current) {
-        recaptchaRef.current.reset();
-      }
       setRecaptchaToken(null);
     } finally {
       setIsSubmitting(false);
@@ -229,9 +221,9 @@ const Contact = () => {
 
                 <div>
                   <RecaptchaComponent
-                    ref={recaptchaRef}
                     onChange={handleRecaptchaChange}
                     onError={handleRecaptchaError}
+                    action="contact"
                     className="mt-2"
                   />
                 </div>

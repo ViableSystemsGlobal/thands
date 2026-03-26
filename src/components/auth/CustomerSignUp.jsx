@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, Link } from 'react-router-dom';
 import { useToast } from '@/components/ui/use-toast';
@@ -25,7 +25,6 @@ const CustomerSignUp = () => {
   const [customerHistory, setCustomerHistory] = useState(null);
   const [emailChecked, setEmailChecked] = useState(false);
   const [recaptchaToken, setRecaptchaToken] = useState(null);
-  const recaptchaRef = useRef(null);
   
   const [formData, setFormData] = useState({
     firstName: '',
@@ -170,12 +169,8 @@ const CustomerSignUp = () => {
     } catch (error) {
       console.error('Sign up error:', error);
       
-      // Reset reCAPTCHA on error
-      if (recaptchaRef.current) {
-        recaptchaRef.current.reset();
-      }
       setRecaptchaToken(null);
-      
+
       toast({
         title: "Sign Up Failed",
         description: error.message || 'An unexpected error occurred during account creation.',
@@ -354,12 +349,12 @@ const CustomerSignUp = () => {
                   {errors.confirmPassword && <p className="text-sm text-red-500 mt-1">{errors.confirmPassword}</p>}
                 </div>
 
-                {/* reCAPTCHA */}
+                {/* reCAPTCHA v3 (invisible) */}
                 <div>
                   <RecaptchaComponent
-                    ref={recaptchaRef}
                     onChange={handleRecaptchaChange}
                     onError={handleRecaptchaError}
+                    action="customer_signup"
                     className="mt-2"
                   />
                   {errors.recaptcha && <p className="text-sm text-red-500 mt-1">{errors.recaptcha}</p>}

@@ -16,7 +16,6 @@ const ConsultationSteps = ({
   onSubmit,
   isSubmitting,
   canProceed,
-  recaptchaRef,
   handleRecaptchaChange,
   handleRecaptchaError,
   recaptchaToken,
@@ -57,9 +56,9 @@ const ConsultationSteps = ({
       {step === steps.length - 1 && (
         <div className="mt-6">
           <RecaptchaComponent
-            ref={recaptchaRef}
             onChange={handleRecaptchaChange}
             onError={handleRecaptchaError}
+            action="consultation"
             className="mt-2"
           />
         </div>

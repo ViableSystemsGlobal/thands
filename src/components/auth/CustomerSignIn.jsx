@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, Link } from 'react-router-dom';
 import { useToast } from '@/components/ui/use-toast';
@@ -26,7 +26,6 @@ const CustomerSignIn = () => {
   const [showEmailConfirmation, setShowEmailConfirmation] = useState(false);
   const [lastEmailUsed, setLastEmailUsed] = useState('');
   const [recaptchaToken, setRecaptchaToken] = useState(null);
-  const recaptchaRef = useRef(null);
   
   const [formData, setFormData] = useState({
     email: '',
@@ -116,12 +115,8 @@ const CustomerSignIn = () => {
     } catch (error) {
       console.error('Sign in error:', error);
       
-      // Reset reCAPTCHA on error
-      if (recaptchaRef.current) {
-        recaptchaRef.current.reset();
-      }
       setRecaptchaToken(null);
-      
+
       // Check if it's an email confirmation issue
       if (error.message.includes('confirm your account') || 
           error.message.includes('email not confirmed')) {
@@ -363,13 +358,13 @@ const CustomerSignIn = () => {
                     </div>
                   )}
 
-                  {/* reCAPTCHA - only show for normal sign in, not forgot password */}
+                  {/* reCAPTCHA v3 (invisible) */}
                   {!showForgotPassword && (
                     <div>
                       <RecaptchaComponent
-                        ref={recaptchaRef}
                         onChange={handleRecaptchaChange}
                         onError={handleRecaptchaError}
+                        action="customer_login"
                         className="mt-2"
                       />
                       {errors.recaptcha && <p className="text-sm text-red-500 mt-1">{errors.recaptcha}</p>}

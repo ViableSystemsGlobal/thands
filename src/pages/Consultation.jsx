@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useToast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,6 @@ const ConsultationPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState(initialConsultationFormData);
   const [recaptchaToken, setRecaptchaToken] = useState(null);
-  const recaptchaRef = useRef(null);
 
   const resetFormAndStep = () => {
     setFormData(initialConsultationFormData);
@@ -75,19 +74,7 @@ const ConsultationPage = () => {
     
     setIsSubmitting(true);
     const success = await handleConsultationSubmit(formData, toast, resetFormAndStep, recaptchaToken);
-    if (success) {
-       // resetFormAndStep is called within handleConsultationSubmit on success
-       if (recaptchaRef.current) {
-         recaptchaRef.current.reset();
-       }
-       setRecaptchaToken(null);
-    } else {
-      // Reset reCAPTCHA on error
-      if (recaptchaRef.current) {
-        recaptchaRef.current.reset();
-      }
-      setRecaptchaToken(null);
-    }
+    setRecaptchaToken(null);
     setIsSubmitting(false);
   };
 
@@ -144,7 +131,6 @@ const ConsultationPage = () => {
               onSubmit={submitForm}
               isSubmitting={isSubmitting}
               canProceed={() => validateConsultationStep(step, formData, stepsConfig.length)}
-              recaptchaRef={recaptchaRef}
               handleRecaptchaChange={handleRecaptchaChange}
               handleRecaptchaError={handleRecaptchaError}
               recaptchaToken={recaptchaToken}
