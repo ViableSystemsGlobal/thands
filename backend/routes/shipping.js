@@ -219,11 +219,14 @@ router.post('/rates', async (req, res) => {
     };
 
     // Check if any shipping rule suppresses DHL for this destination
+    // Admin stores countries as full names (e.g. "Ghana") but address is normalized to code ("GH")
+    // So we need to match both the code and the original country value
+    const originalCountry = address.country || '';
     const suppressCheck = await query(`
       SELECT id, name FROM shipping_rules
       WHERE is_active = true
         AND suppress_dhl = true
-        AND LOWER(TRIM(country)) = LOWER($1)
+        AND (LOWER(TRIM(country)) = LOWER($1) OR LOWER(TRIM(country)) = LOWER($4))
         AND (
           state IS NULL OR TRIM(state) = ''
           OR LOWER(TRIM(state)) = LOWER($2)
@@ -233,7 +236,8 @@ router.post('/rates', async (req, res) => {
     `, [
       normalizedAddress.country,
       normalizedAddress.state || '',
-      normalizedAddress.city || ''
+      normalizedAddress.city || '',
+      originalCountry
     ]);
 
     if (suppressCheck.rows.length > 0) {
@@ -330,9 +334,9 @@ router.post('/rates', async (req, res) => {
                  estimated_days_min, estimated_days_max, is_active
           FROM shipping_rules
           WHERE is_active = true
-            AND (LOWER(TRIM(country)) = LOWER($1) OR country IS NULL OR TRIM(country) = '')
+            AND (LOWER(TRIM(country)) = LOWER($1) OR LOWER(TRIM(country)) = LOWER($4) OR country IS NULL OR TRIM(country) = '')
           ORDER BY
-            CASE WHEN LOWER(TRIM(country)) = LOWER($1) THEN 1 ELSE 2 END,
+            CASE WHEN LOWER(TRIM(country)) = LOWER($1) OR LOWER(TRIM(country)) = LOWER($4) THEN 1 ELSE 2 END,
             CASE
               WHEN state IS NOT NULL AND TRIM(state) != ''
                 AND (LOWER(TRIM(state)) = LOWER($2) OR LOWER(TRIM(state)) = LOWER($3))
@@ -340,7 +344,7 @@ router.post('/rates', async (req, res) => {
             END,
             shipping_cost ASC
           LIMIT 5
-        `, [normalizedAddress.country, normalizedAddress.state || '', normalizedAddress.city || '']);
+        `, [normalizedAddress.country, normalizedAddress.state || '', normalizedAddress.city || '', originalCountry]);
         
         // If no country-specific rule, try any rule with empty/international country
         let rules = rulesResult.rows;

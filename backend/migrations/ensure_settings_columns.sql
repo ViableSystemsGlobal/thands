@@ -10,4 +10,6 @@ ALTER TABLE settings ADD COLUMN IF NOT EXISTS favicon_url TEXT;
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS navbar_logo_url TEXT;
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS footer_logo_url TEXT;
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS captcha_enabled BOOLEAN DEFAULT false;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS recaptcha_site_key TEXT;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS recaptcha_secret_key TEXT;
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS google_places_api_key TEXT;

@@ -49,6 +49,8 @@ const SettingsNew = () => {
     footer_logo_url: '',
     favicon_url: '',
     captcha_enabled: false,
+    recaptcha_site_key: '',
+    recaptcha_secret_key: '',
     google_places_api_key: '',
     google_auth_enabled: false,
     google_client_id: ''
@@ -246,6 +248,8 @@ const SettingsNew = () => {
             footer_logo_url: response.settings.footer_logo_url || '',
             favicon_url: response.settings.favicon_url || '',
             captcha_enabled: response.settings.captcha_enabled || false,
+            recaptcha_site_key: response.settings.recaptcha_site_key || '',
+            recaptcha_secret_key: response.settings.recaptcha_secret_key || '',
             google_places_api_key: response.settings.google_places_api_key || '',
             google_auth_enabled: response.settings.google_auth_enabled || false,
             google_client_id: response.settings.google_client_id || ''
@@ -304,6 +308,8 @@ const SettingsNew = () => {
         navbar_logo_url: settings.navbar_logo_url,
         footer_logo_url: settings.footer_logo_url,
         captcha_enabled: settings.captcha_enabled,
+        recaptcha_site_key: settings.recaptcha_site_key || null,
+        recaptcha_secret_key: settings.recaptcha_secret_key || null,
         google_auth_enabled: settings.google_auth_enabled,
         google_client_id: settings.google_client_id || null,
       };
@@ -1437,6 +1443,35 @@ const SettingsNew = () => {
                           </span>
                       </div>
                   </div>
+
+                  {settings.captcha_enabled && (
+                    <div className="space-y-4 pl-2 border-l-2 border-blue-200">
+                      <div>
+                        <Label htmlFor="recaptcha_site_key">reCAPTCHA v3 Site Key</Label>
+                        <Input
+                          id="recaptcha_site_key"
+                          type="text"
+                          value={settings.recaptcha_site_key || ''}
+                          onChange={(e) => setSettings(prev => ({ ...prev, recaptcha_site_key: e.target.value }))}
+                          placeholder="6Lxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                          className="mt-1 font-mono text-sm"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Public site key from Google reCAPTCHA admin console</p>
+                      </div>
+                      <div>
+                        <Label htmlFor="recaptcha_secret_key">reCAPTCHA v3 Secret Key</Label>
+                        <Input
+                          id="recaptcha_secret_key"
+                          type="password"
+                          value={settings.recaptcha_secret_key || ''}
+                          onChange={(e) => setSettings(prev => ({ ...prev, recaptcha_secret_key: e.target.value }))}
+                          placeholder="6Lxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                          className="mt-1 font-mono text-sm"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Secret key for server-side verification</p>
+                      </div>
+                    </div>
+                  )}
 
                       <div className="border-t pt-6">
                         <h4 className="font-medium mb-4">Change Admin Password</h4>

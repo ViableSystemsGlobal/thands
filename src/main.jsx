@@ -4,7 +4,7 @@ import App from "@/App";
 import "@/index.css";
 import { ToastProvider } from "@/components/ui/use-toast";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import { GoogleReCaptchaProvider } from "react-google-recaptcha-v3";
+import RecaptchaWrapper from "@/components/RecaptchaWrapper";
 
 
 const rootElement = document.getElementById("root");
@@ -25,27 +25,14 @@ window.addEventListener('unhandledrejection', (event) => {
   console.error('🚨 Unhandled promise rejection:', event.reason);
 });
 
-const recaptchaSiteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY || '';
-
-const AppWithProviders = () => (
-  <ToastProvider>
-    <App />
-  </ToastProvider>
-);
-
 root.render(
   <React.StrictMode>
     <ErrorBoundary>
-      {recaptchaSiteKey ? (
-        <GoogleReCaptchaProvider
-          reCaptchaKey={recaptchaSiteKey}
-          scriptProps={{ async: true, defer: true }}
-        >
-          <AppWithProviders />
-        </GoogleReCaptchaProvider>
-      ) : (
-        <AppWithProviders />
-      )}
+      <RecaptchaWrapper>
+        <ToastProvider>
+          <App />
+        </ToastProvider>
+      </RecaptchaWrapper>
     </ErrorBoundary>
   </React.StrictMode>
 );

@@ -227,7 +227,7 @@ router.get('/settings/public', async (req, res) => {
              currency, timezone, exchange_rate_ghs, exchange_rate_gbp,
              hero_image_url, hero_title, hero_subtitle, hero_button_text,
              favicon_url, navbar_logo_url, footer_logo_url,
-             captcha_enabled, paystack_public_key
+             captcha_enabled, recaptcha_site_key, paystack_public_key
       FROM settings LIMIT 1
     `);
 
@@ -330,6 +330,8 @@ router.put('/settings', authenticateToken, async (req, res) => {
         navbar_logo_url,
         footer_logo_url,
         captcha_enabled,
+        recaptcha_site_key,
+        recaptcha_secret_key,
         google_places_api_key,
         google_auth_enabled,
         google_client_id
@@ -355,15 +357,15 @@ router.put('/settings', authenticateToken, async (req, res) => {
           store_name, contact_email, contact_phone, address, store_description,
           currency, timezone, exchange_rate_ghs, exchange_rate_gbp, paystack_public_key, paystack_secret_key,
           hero_image_url, hero_title, hero_subtitle, hero_button_text, favicon_url,
-          navbar_logo_url, footer_logo_url, captcha_enabled, google_places_api_key,
+          navbar_logo_url, footer_logo_url, captcha_enabled, recaptcha_site_key, recaptcha_secret_key, google_places_api_key,
           google_auth_enabled, google_client_id,
           created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, NOW(), NOW())
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, NOW(), NOW())
          RETURNING *`,
         [store_name, contact_email, contact_phone, address, store_description,
          currency, timezone, exchange_rate_ghs, exchange_rate_gbp || 0.79, paystack_public_key, paystack_secret_key,
          hero_image_url, hero_title, hero_subtitle, hero_button_text, favicon_url,
-         navbar_logo_url, footer_logo_url, captcha_enabled, google_places_api_key,
+         navbar_logo_url, footer_logo_url, captcha_enabled, recaptcha_site_key || null, recaptcha_secret_key || null, google_places_api_key,
          google_auth_enabled || false, google_client_id || null]
       );
     } else {
@@ -389,16 +391,18 @@ router.put('/settings', authenticateToken, async (req, res) => {
           navbar_logo_url = COALESCE($17, navbar_logo_url),
           footer_logo_url = COALESCE($18, footer_logo_url),
           captcha_enabled = COALESCE($19, captcha_enabled),
-          google_places_api_key = COALESCE($20, google_places_api_key),
-          google_auth_enabled = COALESCE($21, google_auth_enabled),
-          google_client_id = COALESCE($22, google_client_id),
+          recaptcha_site_key = COALESCE($20, recaptcha_site_key),
+          recaptcha_secret_key = COALESCE($21, recaptcha_secret_key),
+          google_places_api_key = COALESCE($22, google_places_api_key),
+          google_auth_enabled = COALESCE($23, google_auth_enabled),
+          google_client_id = COALESCE($24, google_client_id),
           updated_at = NOW()
-        WHERE id = $23
+        WHERE id = $25
         RETURNING *`,
         [store_name, contact_email, contact_phone, address, store_description,
          currency, timezone, exchange_rate_ghs, exchange_rate_gbp || 0.79, paystack_public_key, paystack_secret_key,
          hero_image_url, hero_title, hero_subtitle, hero_button_text, favicon_url,
-         navbar_logo_url, footer_logo_url, captcha_enabled, google_places_api_key,
+         navbar_logo_url, footer_logo_url, captcha_enabled, recaptcha_site_key || null, recaptcha_secret_key || null, google_places_api_key,
          google_auth_enabled ?? null, google_client_id ?? null, existingSettings.rows[0].id]
       );
       

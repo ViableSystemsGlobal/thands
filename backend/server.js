@@ -182,7 +182,17 @@ server.listen(PORT, async () => {
   console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
   console.log(`🔌 WebSocket server running on ws://localhost:${PORT}`);
   console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
-  
+
+  // Ensure new settings columns exist
+  try {
+    const { query } = require('./config/database');
+    await query('ALTER TABLE settings ADD COLUMN IF NOT EXISTS recaptcha_site_key TEXT');
+    await query('ALTER TABLE settings ADD COLUMN IF NOT EXISTS recaptcha_secret_key TEXT');
+    console.log('✅ Settings columns verified');
+  } catch (error) {
+    console.error('⚠️ Could not verify settings columns:', error.message);
+  }
+
   // Initialize DHL service
   try {
     const dhlService = require('./services/dhlService');
