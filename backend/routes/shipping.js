@@ -10,14 +10,14 @@ const router = express.Router();
 router.get('/', async (req, res) => {
   try {
     const result = await query(`
-      SELECT id, name, country, shipping_cost, per_kg_rate, free_shipping_threshold, 
+      SELECT id, name, country, shipping_cost, per_kg_rate, free_shipping_threshold,
              estimated_days_min, estimated_days_max, is_active,
-             min_order_value, max_order_value, state
-      FROM shipping_rules 
-      WHERE is_active = true 
+             min_order_value, max_order_value, state, suppress_dhl
+      FROM shipping_rules
+      WHERE is_active = true
       ORDER BY name
     `);
-    
+
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching shipping rules:', error);
@@ -31,14 +31,14 @@ router.get('/', async (req, res) => {
 router.get('/active', async (req, res) => {
   try {
     const result = await query(`
-      SELECT id, name, country, shipping_cost, per_kg_rate, free_shipping_threshold, 
+      SELECT id, name, country, shipping_cost, per_kg_rate, free_shipping_threshold,
              estimated_days_min, estimated_days_max, is_active,
-             min_order_value, max_order_value, state
-      FROM shipping_rules 
-      WHERE is_active = true 
+             min_order_value, max_order_value, state, suppress_dhl
+      FROM shipping_rules
+      WHERE is_active = true
       ORDER BY name
     `);
-    
+
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching shipping rules:', error);
@@ -222,6 +222,12 @@ router.post('/rates', async (req, res) => {
     // Admin stores countries as full names (e.g. "Ghana") but address is normalized to code ("GH")
     // So we need to match both the code and the original country value
     const originalCountry = address.country || '';
+    console.log('🔍 Suppress check params:', {
+      normalizedCountry: normalizedAddress.country,
+      originalCountry,
+      state: normalizedAddress.state,
+      city: normalizedAddress.city
+    });
     const suppressCheck = await query(`
       SELECT id, name FROM shipping_rules
       WHERE is_active = true
