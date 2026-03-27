@@ -1295,12 +1295,26 @@ router.post('/pickup', authenticateToken, async (req, res) => {
     }
 
     // Build per-shipment details with actual parcel dimensions
+    // Also fetch receiver details for the first order (needed by DHL pickup API)
     const shipmentDetails = [];
+    let receiverOrder = null;
     for (const tn of trackingNumbers) {
       const orderData = orderDataMap[tn];
       const toCountry = normalizeCountryCode(orderData?.shipping_country || 'GH');
       const isDomestic = fromCountry === toCountry;
       const declaredValue = parseFloat(orderData?.base_total || 0) || 50;
+
+      // Fetch full order details for receiver info (use first order)
+      if (!receiverOrder && orderData?.id) {
+        const fullOrder = await query(
+          `SELECT shipping_first_name, shipping_last_name, shipping_address,
+                  shipping_city, shipping_state, shipping_postal_code, shipping_country,
+                  shipping_phone, shipping_email
+           FROM orders WHERE id = $1`,
+          [orderData.id]
+        );
+        if (fullOrder.rows[0]) receiverOrder = fullOrder.rows[0];
+      }
 
       // Calculate actual parcel dimensions from order items
       let weightKg = 1;
@@ -1360,6 +1374,7 @@ router.post('/pickup', authenticateToken, async (req, res) => {
             postalCode:   fromZip || '00233',
             cityName:     fromCity,
             countryCode:  fromCountry,
+            countyName:   fromState || 'Greater Accra',
             addressLine1: fromStreet.substring(0, 45),
             addressLine2: fromName.substring(0, 45),
           },
@@ -1367,6 +1382,22 @@ router.post('/pickup', authenticateToken, async (req, res) => {
             phone:       fromPhone,
             companyName: fromName,
             fullName:    fromName,
+            email:       'info@tailoredhands.africa',
+          },
+        },
+        receiverDetails: {
+          postalAddress: {
+            addressLine1: (receiverOrder?.shipping_address || 'Receiver Address').substring(0, 45),
+            postalCode:   receiverOrder?.shipping_postal_code || '00000',
+            cityName:     receiverOrder?.shipping_city || 'City',
+            countyName:   receiverOrder?.shipping_state || '',
+            countryCode:  normalizeCountryCode(receiverOrder?.shipping_country || 'GH'),
+          },
+          contactInformation: {
+            fullName:    `${receiverOrder?.shipping_first_name || ''} ${receiverOrder?.shipping_last_name || ''}`.trim() || 'Receiver',
+            companyName: `${receiverOrder?.shipping_first_name || ''} ${receiverOrder?.shipping_last_name || ''}`.trim() || 'Receiver',
+            email:       receiverOrder?.shipping_email || 'customer@example.com',
+            phone:       receiverOrder?.shipping_phone || '+000000000',
           },
         },
       },
