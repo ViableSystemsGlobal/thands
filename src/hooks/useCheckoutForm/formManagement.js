@@ -284,7 +284,10 @@ export const useFormManagement = (
     if (!currentFormData.city) errors.city = "City is required";
     if (!currentFormData.state) errors.state = "State/Region is required";
     if (!currentFormData.country) errors.country = "Country is required";
-    if (!currentFormData.postalCode) errors.postalCode = "Postal code is required";
+    const noPostalCountries = ['ghana', 'nigeria', 'togo', 'benin', 'côte d\'ivoire', 'ivory coast', 'burkina faso', 'mali', 'niger'];
+    if (!currentFormData.postalCode && !noPostalCountries.includes(currentFormData.country?.toLowerCase())) {
+      errors.postalCode = "Postal code is required";
+    }
 
     // Only show shipping error if:
     // 1. We have a country selected

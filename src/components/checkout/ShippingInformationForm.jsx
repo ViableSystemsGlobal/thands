@@ -236,12 +236,15 @@ const ShippingInformationForm = ({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="postalCode">Postal Code</Label>
+          <Label htmlFor="postalCode">
+            Postal Code {formData.country?.toLowerCase() === 'ghana' && <span className="text-gray-400 font-normal text-xs">(Optional)</span>}
+          </Label>
           <Input
             id="postalCode"
             name="postalCode"
             value={formData.postalCode}
             onChange={handleInputChange}
+            placeholder={formData.country?.toLowerCase() === 'ghana' ? 'e.g. 00000 (optional)' : ''}
             className={formErrors.postalCode ? "border-red-500" : ""}
           />
           {formErrors.postalCode && (
