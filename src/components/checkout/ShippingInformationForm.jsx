@@ -162,20 +162,24 @@ const ShippingInformationForm = ({
           value={formData.address}
           onChange={(value) => handleInputChange({ target: { name: 'address', value } })}
           onAddressSelect={(addressData) => {
-            // Auto-fill form fields with parsed address data
-            handleInputChange({ target: { name: 'address', value: addressData.address } });
-            if (addressData.city) {
-              handleInputChange({ target: { name: 'city', value: addressData.city } });
-            }
-            if (addressData.state) {
-              handleInputChange({ target: { name: 'state', value: addressData.state } });
-            }
-            if (addressData.zip) {
-              handleInputChange({ target: { name: 'postalCode', value: addressData.zip } });
-            }
-            if (addressData.country) {
-              handleInputChange({ target: { name: 'country', value: addressData.country } });
-            }
+            // Batch all address fields into a single state update to avoid
+            // race conditions with shipping calculation dedup logic
+            const updates = { address: addressData.address };
+            if (addressData.city) updates.city = addressData.city;
+            if (addressData.state) updates.state = addressData.state;
+            if (addressData.zip) updates.postalCode = addressData.zip;
+            if (addressData.country) updates.country = addressData.country;
+
+            // Apply all updates at once
+            Object.entries(updates).forEach(([name, value]) => {
+              handleInputChange({ target: { name, value } });
+            });
+
+            // Signal that address autocomplete was used so shipping recalculates
+            // Delay to ensure React has processed the state updates above
+            setTimeout(() => {
+              handleInputChange({ target: { name: '_addressAutoComplete', value: Date.now().toString() } });
+            }, 200);
           }}
           placeholder="Enter your address"
           label="Address"

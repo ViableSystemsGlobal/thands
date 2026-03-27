@@ -231,6 +231,14 @@ export const useFormManagement = (
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+
+    // When address autocomplete fires, reset shipping dedup so it recalculates
+    if (name === '_addressAutoComplete') {
+      lastCalculationRef.current = { country: '', cartTotal: 0, rulesLength: 0 };
+      updateShippingRuleLocal();
+      return;
+    }
+
     console.log('📝 Form input changed:', { name, value });
     setFormData(prev => ({ ...prev, [name]: value }));
     if (formErrors[name]) {
