@@ -1354,9 +1354,9 @@ router.post('/pickup', authenticateToken, async (req, res) => {
       shipmentDetails.push(detail);
     }
 
-    // Ensure time values include seconds for DHL format (HH:mm:ss)
+    // plannedPickupDateAndTime needs seconds (HH:mm:ss), but closeTime must be HH:mm (max 5 chars)
     const readyTime = (pickupTimeFrom || '09:00').replace(/^(\d{2}:\d{2})$/, '$1:00');
-    const closeTime = (pickupTimeTo   || '17:00').replace(/^(\d{2}:\d{2})$/, '$1:00');
+    const closeTime = (pickupTimeTo   || '17:00').substring(0, 5);
 
     const pickupBody = {
       plannedPickupDateAndTime: `${pickupDate}T${readyTime} GMT+00:00`,
