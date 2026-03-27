@@ -189,7 +189,8 @@ const GoogleAddressAutocomplete = ({
           } else if (types.includes('postal_code')) {
             addressData.zip = component.long_name;
           } else if (types.includes('country')) {
-            addressData.country = component.short_name;
+            addressData.country = component.long_name;
+            addressData.countryCode = component.short_name;
           }
         });
 
