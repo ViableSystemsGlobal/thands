@@ -378,10 +378,18 @@ class DHLService {
 
       console.log('📦 DHL: Scheduling pickup');
       const data = await this.makeRequest('/pickups', 'POST', pickupData);
+      console.log('📦 DHL pickup raw response:', JSON.stringify(data, null, 2));
+
+      // DHL may return the confirmation number under different field names
+      const confirmationNumber = data.dispatchConfirmationNumber
+        || data.dispatchConfirmationNumbers?.[0]
+        || data.confirmationNumber
+        || data.pickupConfirmationNumber
+        || null;
 
       return {
         success: true,
-        dispatchConfirmationNumber: data.dispatchConfirmationNumber,
+        dispatchConfirmationNumber: confirmationNumber,
         readyByTime: data.readyByTime,
         raw: data,
       };
