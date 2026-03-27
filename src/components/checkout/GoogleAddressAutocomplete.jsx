@@ -140,7 +140,7 @@ const GoogleAddressAutocomplete = ({
       
       const request = {
         input,
-        types: ['address']
+        types: ['geocode', 'establishment']
       };
       
       autocompleteService.current.getPlacePredictions(request, handlePredictions);
