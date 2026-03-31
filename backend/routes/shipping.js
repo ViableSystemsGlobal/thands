@@ -674,7 +674,7 @@ router.post('/label', authenticateToken, async (req, res) => {
         },
         exportReason: 'PERMANENT',
         exportReasonType: 'permanent',
-        placeOfIncoterm: order.shipping_city || fromCity || 'Accra',
+        placeOfIncoterm: order.shipping_city || order.shipping_state || toCountry,
       },
     };
 
