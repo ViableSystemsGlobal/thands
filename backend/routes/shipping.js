@@ -218,36 +218,11 @@ router.post('/rates', async (req, res) => {
       return details;
     };
 
-    // Check if any shipping rule suppresses DHL for this destination
-    // Admin stores countries as full names (e.g. "Ghana") but address is normalized to code ("GH")
-    // So we need to match both the code and the original country value
+    // Ghana destinations use manual shipping rules; everywhere else tries DHL first
+    // (with manual as a fallback only if DHL fails to return rates).
     const originalCountry = address.country || '';
-    console.log('🔍 Suppress check params:', {
-      normalizedCountry: normalizedAddress.country,
-      originalCountry,
-      state: normalizedAddress.state,
-      city: normalizedAddress.city
-    });
-    const suppressCheck = await query(`
-      SELECT id, name FROM shipping_rules
-      WHERE is_active = true
-        AND suppress_dhl = true
-        AND (LOWER(TRIM(country)) = LOWER($1) OR LOWER(TRIM(country)) = LOWER($4))
-        AND (
-          state IS NULL OR TRIM(state) = ''
-          OR LOWER(TRIM(state)) = LOWER($2)
-          OR LOWER(TRIM(state)) = LOWER($3)
-        )
-      LIMIT 1
-    `, [
-      normalizedAddress.country,
-      normalizedAddress.state || '',
-      normalizedAddress.city || '',
-      originalCountry
-    ]);
-
-    if (suppressCheck.rows.length > 0) {
-      console.log(`🚫 DHL suppressed for this destination by rule: "${suppressCheck.rows[0].name}"`);
+    if (normalizedAddress.country === 'GH') {
+      console.log('🇬🇭 Ghana destination; using manual shipping rules');
       useManualShipping = true;
     }
 
