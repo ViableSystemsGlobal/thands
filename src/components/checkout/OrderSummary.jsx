@@ -22,7 +22,8 @@ const CheckoutOrderSummary = ({
   showSubmitButton = true,
   submitButtonText = "Continue to Order Verification",
   onSubmit,
-  selectedShipping
+  selectedShipping,
+  deliveryMethod = 'delivery'
 }) => {
   const { cart, cartTotal, cartItemsCount } = useShop();
   const { formatPrice, currency } = useCurrency(); 
@@ -42,7 +43,9 @@ const CheckoutOrderSummary = ({
     : 0;
   
   const selectedAmount = selectedShipping?.amount ?? selectedShipping?.cost;
-  const shippingCost = selectedAmount !== undefined && selectedAmount !== null
+  const shippingCost = deliveryMethod === 'pickup'
+    ? 0
+    : selectedAmount !== undefined && selectedAmount !== null
     ? parseFloat(selectedAmount)
     : (calculatedCost || ruleCost);
   
@@ -114,7 +117,9 @@ const CheckoutOrderSummary = ({
         </div>
         <div className="flex justify-between text-sm">
           <span className="text-gray-600">
-            {selectedShipping ? `Shipping (${selectedShipping.service || selectedShipping.carrier || 'Standard'})` : 'Shipping'}
+            {deliveryMethod === 'pickup'
+              ? 'Pickup'
+              : (selectedShipping ? `Shipping (${selectedShipping.service || selectedShipping.carrier || 'Standard'})` : 'Shipping')}
           </span>
           <span className="text-gray-800 font-medium">
             {shippingCost > 0 

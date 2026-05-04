@@ -70,12 +70,22 @@ app.use('/api/images', (req, res, next) => {
 }, require('./middleware/imageOptimization'), express.static(path.join(projectRoot, 'uploads')));
 
 // General rate limiting
+const isDevelopment = (process.env.NODE_ENV || 'development') === 'development';
 const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
-  message: 'Too many requests from this IP, please try again later.'
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) || 15 * 60 * 1000,
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS, 10) || 100,
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false
 });
-app.use('/api/', limiter);
+
+// Development makes many parallel API calls while HMR and contexts initialize.
+// Keep strict auth limiting, but skip broad global throttling in dev.
+if (!isDevelopment) {
+  app.use('/api/', limiter);
+} else {
+  console.log('⚠️ General API rate limiter disabled in development mode');
+}
 
 // Strict rate limiting for auth endpoints (brute force protection)
 const authLimiter = rateLimit({

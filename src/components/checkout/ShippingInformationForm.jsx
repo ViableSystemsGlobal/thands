@@ -157,101 +157,145 @@ const ShippingInformationForm = ({
         )}
       </div>
 
-      <div className="space-y-2 mt-4">
-        <GoogleAddressAutocomplete
-          value={formData.address}
-          onChange={(value) => handleInputChange({ target: { name: 'address', value } })}
-          onAddressSelect={(addressData) => {
-            // Batch all address fields into a single state update to avoid
-            // race conditions with shipping calculation dedup logic
-            const updates = { address: addressData.address };
-            if (addressData.city) updates.city = addressData.city;
-            if (addressData.state) updates.state = addressData.state;
-            if (addressData.zip) updates.postalCode = addressData.zip;
-            if (addressData.country) updates.country = addressData.country;
-
-            // Apply all updates at once
-            Object.entries(updates).forEach(([name, value]) => {
-              handleInputChange({ target: { name, value } });
-            });
-
-            // Signal that address autocomplete was used so shipping recalculates
-            // Delay to ensure React has processed the state updates above
-            setTimeout(() => {
-              handleInputChange({ target: { name: '_addressAutoComplete', value: Date.now().toString() } });
-            }, 200);
-          }}
-          placeholder="Enter your address"
-          label="Address"
-          required={true}
-        />
-        {formErrors.address && (
-          <p className="text-sm text-red-500">{formErrors.address}</p>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-        <div className="space-y-2">
-          <Label htmlFor="city">City</Label>
-          <Input
-            id="city"
-            name="city"
-            value={formData.city}
-            onChange={handleInputChange}
-            className={formErrors.city ? "border-red-500" : ""}
-          />
-          {formErrors.city && (
-            <p className="text-sm text-red-500">{formErrors.city}</p>
-          )}
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="state">State/Region</Label>
-          <Input
-            id="state"
-            name="state"
-            value={formData.state}
-            onChange={handleInputChange}
-            className={formErrors.state ? "border-red-500" : ""}
-          />
-          {formErrors.state && (
-            <p className="text-sm text-red-500">{formErrors.state}</p>
-          )}
+      <div className="space-y-3 mt-4">
+        <Label>Delivery Method</Label>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => handleInputChange({ target: { name: "deliveryMethod", value: "delivery" } })}
+            className={`text-left p-3 rounded-md border transition-colors ${
+              (formData.deliveryMethod || "delivery") === "delivery"
+                ? "border-[#D2B48C] bg-amber-50"
+                : "border-gray-200 hover:border-gray-300"
+            }`}
+          >
+            <p className="font-medium text-gray-800">Deliver to Address</p>
+            <p className="text-xs text-gray-500 mt-1">Ship items to your provided address.</p>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onShippingSelected?.(null);
+              handleInputChange({ target: { name: "deliveryMethod", value: "pickup" } });
+            }}
+            className={`text-left p-3 rounded-md border transition-colors ${
+              (formData.deliveryMethod || "delivery") === "pickup"
+                ? "border-[#D2B48C] bg-amber-50"
+                : "border-gray-200 hover:border-gray-300"
+            }`}
+          >
+            <p className="font-medium text-gray-800">Pick Up From Shop</p>
+            <p className="text-xs text-gray-500 mt-1">Collect your order in-store (no shipping fee).</p>
+          </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-        <div className="space-y-2">
-          <Label htmlFor="country">Country</Label>
-          <CountryCombobox
-            items={countries}
-            value={formData.country}
-            onChange={(value) => handleInputChange({ target: { name: "country", value } })}
-            error={formErrors.country}
-            shippingRules={shippingRules || []}
-          />
-          {formErrors.country && (
-            <p className="text-sm text-red-500">{formErrors.country}</p>
-          )}
+      {(formData.deliveryMethod || "delivery") === "pickup" ? (
+        <div className="mt-4 p-4 rounded-md border border-amber-200 bg-amber-50">
+          <p className="text-sm font-medium text-gray-800">Shop Pickup Selected</p>
+          <p className="text-sm text-gray-600 mt-1">
+            You will pick up this order from our shop. Shipping address details are optional for pickup orders.
+          </p>
         </div>
+      ) : (
+        <>
+          <div className="space-y-2 mt-4">
+            <GoogleAddressAutocomplete
+              value={formData.address}
+              onChange={(value) => handleInputChange({ target: { name: 'address', value } })}
+              onAddressSelect={(addressData) => {
+                // Batch all address fields into a single state update to avoid
+                // race conditions with shipping calculation dedup logic
+                const updates = { address: addressData.address };
+                if (addressData.city) updates.city = addressData.city;
+                if (addressData.state) updates.state = addressData.state;
+                if (addressData.zip) updates.postalCode = addressData.zip;
+                if (addressData.country) updates.country = addressData.country;
 
-        <div className="space-y-2">
-          <Label htmlFor="postalCode">
-            Postal Code {formData.country?.toLowerCase() === 'ghana' && <span className="text-gray-400 font-normal text-xs">(Optional)</span>}
-          </Label>
-          <Input
-            id="postalCode"
-            name="postalCode"
-            value={formData.postalCode}
-            onChange={handleInputChange}
-            placeholder={formData.country?.toLowerCase() === 'ghana' ? 'e.g. 00000 (optional)' : ''}
-            className={formErrors.postalCode ? "border-red-500" : ""}
-          />
-          {formErrors.postalCode && (
-            <p className="text-sm text-red-500">{formErrors.postalCode}</p>
-          )}
-        </div>
-      </div>
+                // Apply all updates at once
+                Object.entries(updates).forEach(([name, value]) => {
+                  handleInputChange({ target: { name, value } });
+                });
+
+                // Signal that address autocomplete was used so shipping recalculates
+                // Delay to ensure React has processed the state updates above
+                setTimeout(() => {
+                  handleInputChange({ target: { name: '_addressAutoComplete', value: Date.now().toString() } });
+                }, 200);
+              }}
+              placeholder="Enter your address"
+              label="Address"
+              required={true}
+            />
+            {formErrors.address && (
+              <p className="text-sm text-red-500">{formErrors.address}</p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+            <div className="space-y-2">
+              <Label htmlFor="city">City</Label>
+              <Input
+                id="city"
+                name="city"
+                value={formData.city}
+                onChange={handleInputChange}
+                className={formErrors.city ? "border-red-500" : ""}
+              />
+              {formErrors.city && (
+                <p className="text-sm text-red-500">{formErrors.city}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="state">State/Region</Label>
+              <Input
+                id="state"
+                name="state"
+                value={formData.state}
+                onChange={handleInputChange}
+                className={formErrors.state ? "border-red-500" : ""}
+              />
+              {formErrors.state && (
+                <p className="text-sm text-red-500">{formErrors.state}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+            <div className="space-y-2">
+              <Label htmlFor="country">Country</Label>
+              <CountryCombobox
+                items={countries}
+                value={formData.country}
+                onChange={(value) => handleInputChange({ target: { name: "country", value } })}
+                error={formErrors.country}
+                shippingRules={shippingRules || []}
+              />
+              {formErrors.country && (
+                <p className="text-sm text-red-500">{formErrors.country}</p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="postalCode">
+                Postal Code {formData.country?.toLowerCase() === 'ghana' && <span className="text-gray-400 font-normal text-xs">(Optional)</span>}
+              </Label>
+              <Input
+                id="postalCode"
+                name="postalCode"
+                value={formData.postalCode}
+                onChange={handleInputChange}
+                placeholder={formData.country?.toLowerCase() === 'ghana' ? 'e.g. 00000 (optional)' : ''}
+                className={formErrors.postalCode ? "border-red-500" : ""}
+              />
+              {formErrors.postalCode && (
+                <p className="text-sm text-red-500">{formErrors.postalCode}</p>
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Order Notes */}
       <div className="space-y-2 mt-6">
@@ -349,15 +393,16 @@ const ShippingInformationForm = ({
         )}
       </div>
 
-      {/* Shippo Shipping Options */}
-      <div className="mt-6">
-        <ShippoShippingOptions
-          address={formData}
-          cartItems={cartItems || []}
-          onShippingSelected={onShippingSelected}
-          selectedShipping={selectedShipping}
-        />
-      </div>
+      {(formData.deliveryMethod || "delivery") !== "pickup" && (
+        <div className="mt-6">
+          <ShippoShippingOptions
+            address={formData}
+            cartItems={cartItems || []}
+            onShippingSelected={onShippingSelected}
+            selectedShipping={selectedShipping}
+          />
+        </div>
+      )}
 
       {!user && (
         <div className="mt-6">

@@ -183,6 +183,7 @@ router.post('/get-or-create', [
   body('firstName').optional().isString(),
   body('lastName').optional().isString(),
   body('phone').optional().isString(),
+  body('userId').optional({ nullable: true }).isUUID(),
   body('attemptAccountCreation').optional().isBoolean()
 ], async (req, res) => {
   const errors = validationResult(req);
@@ -190,7 +191,7 @@ router.post('/get-or-create', [
     return res.status(400).json({ success: false, errors: errors.array() });
   }
 
-  const { email, firstName, lastName, phone, attemptAccountCreation = false } = req.body;
+  const { email, firstName, lastName, phone, userId, attemptAccountCreation = false } = req.body;
 
   try {
     // Search for existing customer
@@ -218,10 +219,11 @@ router.post('/get-or-create', [
             first_name = COALESCE($1, first_name),
             last_name = COALESCE($2, last_name),
             phone = COALESCE($3, phone),
+            user_id = COALESCE($5, user_id),
             updated_at = CURRENT_TIMESTAMP
           WHERE id = $4
           RETURNING *`,
-          [firstName, lastName, phone, existingCustomer.id]
+          [firstName, lastName, phone, existingCustomer.id, userId || null]
         );
 
         return res.json({ success: true, data: updatedCustomerResult.rows[0] });
@@ -240,10 +242,11 @@ router.post('/get-or-create', [
             first_name = COALESCE($1, first_name),
             last_name = COALESCE($2, last_name),
             phone = COALESCE($3, phone),
+            user_id = COALESCE($5, user_id),
             updated_at = CURRENT_TIMESTAMP
           WHERE id = $4
           RETURNING *`,
-          [firstName, lastName, phone, existingCustomer.id]
+          [firstName, lastName, phone, existingCustomer.id, userId || null]
         );
 
         return res.json({ success: true, data: updatedCustomerResult.rows[0] });
@@ -259,10 +262,10 @@ router.post('/get-or-create', [
         // Create new guest customer
         const newCustomerResult = await query(
           `INSERT INTO customers (
-            email, first_name, last_name, phone, created_at, updated_at
-          ) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            email, first_name, last_name, phone, user_id, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
           RETURNING *`,
-          [email.toLowerCase(), firstName, lastName, phone]
+          [email.toLowerCase(), firstName, lastName, phone, userId || null]
         );
 
         return res.json({ success: true, data: newCustomerResult.rows[0] });

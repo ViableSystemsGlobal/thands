@@ -6,11 +6,11 @@ export async function getPaymentConfig() {
     console.log('🔑 Fetching payment configuration from database via API...');
     console.log('🚨 DEBUG: getPaymentConfig function called!');
     
-    // Fetch from our backend API instead of directly from Supabase
-    const result = await api.get('/admin/settings');
+    // Checkout is public, so this must not call the authenticated admin settings endpoint.
+    // The public settings route exposes only the Paystack public key, which is safe for browsers.
+    const result = await api.get('/admin/settings/public');
     const data = {
       paystack_public_key: result.settings?.paystack_public_key,
-      paystack_secret_key: result.settings?.paystack_secret_key
     };
 
     if (!data.paystack_public_key) {
@@ -20,7 +20,6 @@ export async function getPaymentConfig() {
     
     console.log('✅ Payment config fetched from database:', {
       hasPublicKey: !!data?.paystack_public_key,
-      hasSecretKey: !!data?.paystack_secret_key,
       publicKeyPrefix: data?.paystack_public_key?.substring(0, 12) || 'none'
     });
     

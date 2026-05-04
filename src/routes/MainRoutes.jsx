@@ -27,6 +27,7 @@ import SimpleApiTest from "@/components/test/SimpleApiTest";
 import AuthTest from "@/components/test/AuthTest";
 import UploadTest from "@/components/test/UploadTest";
 import EmailTest from "@/components/test/EmailTest";
+import FAQs from "@/pages/FAQs";
 
 const MainRoutes = () => {
   return (
@@ -40,6 +41,7 @@ const MainRoutes = () => {
         <Route path="/wishlist" element={<Wishlist />} />
         <Route path="/about" element={<About />} />
         <Route path="/contact" element={<Contact />} />
+        <Route path="/faqs" element={<FAQs />} />
         <Route path="/product/:id" element={<ProductDetailApi />} />
         <Route path="/product-old/:id" element={<ProductDetail />} />
         <Route path="/consultation" element={<ConsultationForm />} />

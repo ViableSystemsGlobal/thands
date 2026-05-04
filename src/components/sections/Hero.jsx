@@ -47,7 +47,11 @@ const Hero = () => {
         <LazyImage  
           className="w-full h-full object-cover object-top"
           alt="Fashion hero image" 
-          src={optimizedHeroImageUrl || heroSettings.hero_image_url} />
+          src={optimizedHeroImageUrl || heroSettings.hero_image_url}
+          eager={true}
+          keepVisibleWhileLoading={true}
+          showPlaceholderIcon={false}
+          placeholderClassName="bg-gray-100" />
       </div>
       
       <div className="relative container mx-auto px-4 min-h-screen flex items-end pb-24 md:pb-32">

@@ -143,6 +143,19 @@ const MobileNav = ({ onNavigate }) => {
       >
         About
       </Link>
+
+      <Link
+        to="/faqs"
+        className={cn(
+          "text-xl tracking-wide transition-colors",
+          isActive('/faqs')
+            ? "text-[#D2B48C] font-medium"
+            : "hover:text-[#D2B48C]"
+        )}
+        onClick={() => handleNavigation("/faqs")}
+      >
+        FAQ
+      </Link>
       
       <Link 
         to="/contact" 

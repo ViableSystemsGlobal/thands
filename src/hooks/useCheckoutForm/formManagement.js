@@ -43,6 +43,18 @@ export const useFormManagement = (
 
   // Define updateShippingRuleLocal BEFORE the useEffect hooks that use it
   const updateShippingRuleLocal = useCallback(async () => {
+    if ((formData.deliveryMethod || 'delivery') === 'pickup') {
+      setShippingRule({
+        name: 'Shop Pickup',
+        shipping_cost: 0,
+        delivery_time: 'Ready for collection'
+      });
+      setCalculatedShippingCost(0);
+      setHasAttemptedShippingCalculation(false);
+      setIsCalculatingShipping(false);
+      return;
+    }
+
     console.log('🚚 updateShippingRuleLocal called with:', {
       country: formData.country,
       cartTotal,
@@ -156,7 +168,7 @@ export const useFormManagement = (
     } finally {
       setIsCalculatingShipping(false);
     }
-  }, [formData.country, cartTotal, stableShippingRules, totalWeight]);
+  }, [formData.country, formData.deliveryMethod, cartTotal, stableShippingRules, totalWeight]);
 
   // Force recalculation when shipping rules are first loaded and country is already set
   useEffect(() => {
@@ -185,6 +197,16 @@ export const useFormManagement = (
 
   useEffect(() => {
     // Only run if we have the minimum required data
+    if ((formData.deliveryMethod || 'delivery') === 'pickup') {
+      setShippingRule({
+        name: 'Shop Pickup',
+        shipping_cost: 0,
+        delivery_time: 'Ready for collection'
+      });
+      setCalculatedShippingCost(0);
+      return;
+    }
+
     if (!formData.country || cartTotal <= 0 || !hasShippingRules) {
       console.log('❌ Shipping calculation skipped - missing requirements:', {
         hasCountry: !!formData.country,
@@ -227,7 +249,7 @@ export const useFormManagement = (
 
     // Update the last calculation state
     lastCalculationRef.current = currentState;
-  }, [formData.country, cartTotal, hasShippingRules, stableShippingRules, updateShippingRuleLocal]);
+  }, [formData.country, formData.deliveryMethod, cartTotal, hasShippingRules, stableShippingRules, updateShippingRuleLocal]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -275,18 +297,21 @@ export const useFormManagement = (
 
   const validateForm = (currentFormData, currentCreateAccount, currentPassword) => {
     const errors = {};
+    const isPickup = (currentFormData.deliveryMethod || 'delivery') === 'pickup';
     if (!currentFormData.firstName) errors.firstName = "First name is required";
     if (!currentFormData.lastName) errors.lastName = "Last name is required";
     if (!currentFormData.email) errors.email = "Email is required";
     else if (!/\S+@\S+\.\S+/.test(currentFormData.email)) errors.email = "Email is invalid";
     if (!currentFormData.phone) errors.phone = "Phone is required";
-    if (!currentFormData.address) errors.address = "Address is required";
-    if (!currentFormData.city) errors.city = "City is required";
-    if (!currentFormData.state) errors.state = "State/Region is required";
-    if (!currentFormData.country) errors.country = "Country is required";
-    const noPostalCountries = ['ghana', 'nigeria', 'togo', 'benin', 'côte d\'ivoire', 'ivory coast', 'burkina faso', 'mali', 'niger'];
-    if (!currentFormData.postalCode && !noPostalCountries.includes(currentFormData.country?.toLowerCase())) {
-      errors.postalCode = "Postal code is required";
+    if (!isPickup) {
+      if (!currentFormData.address) errors.address = "Address is required";
+      if (!currentFormData.city) errors.city = "City is required";
+      if (!currentFormData.state) errors.state = "State/Region is required";
+      if (!currentFormData.country) errors.country = "Country is required";
+      const noPostalCountries = ['ghana', 'nigeria', 'togo', 'benin', 'côte d\'ivoire', 'ivory coast', 'burkina faso', 'mali', 'niger'];
+      if (!currentFormData.postalCode && !noPostalCountries.includes(currentFormData.country?.toLowerCase())) {
+        errors.postalCode = "Postal code is required";
+      }
     }
 
     // Only show shipping error if:
@@ -296,13 +321,13 @@ export const useFormManagement = (
     // 4. The calculation completed and no rule was found
     // 5. No DHL/international shipping option was selected
     const hasValidShipping = shippingRule || selectedShippingOption;
-    if (!hasValidShipping && 
+    if (!isPickup && !hasValidShipping && 
         currentFormData.country && 
         shippingRulesProp.length > 0 && 
         hasAttemptedShippingCalculation && 
         !isCalculatingShipping) {
       errors.country = "Shipping not available for this country or cart value.";
-    } else if (!currentFormData.country && shippingRulesProp.length > 0 && cartTotal > 0 && !selectedShippingOption) { // only require country if cart has items and no shipping selected
+    } else if (!isPickup && !currentFormData.country && shippingRulesProp.length > 0 && cartTotal > 0 && !selectedShippingOption) { // only require country if cart has items and no shipping selected
       errors.country = "Please select a country for shipping calculation.";
     }
 

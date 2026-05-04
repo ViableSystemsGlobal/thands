@@ -53,10 +53,28 @@ const ChatbotWebSocket = () => {
         id: message.id,
         text: message.message,
         sender: message.sender_type === 'user' ? 'user' : 'assistant',
-        timestamp: new Date(message.created_at)
+        timestamp: new Date(message.created_at),
+        optimistic: false
       };
       
-      setMessages(prev => [...prev, formattedMessage]);
+      setMessages((prev) => {
+        // Reconcile optimistic user message with echoed server message to avoid duplicates.
+        if (formattedMessage.sender === 'user') {
+          const matchIndex = prev.findIndex((msg) =>
+            msg.sender === 'user' &&
+            msg.optimistic === true &&
+            msg.text?.trim() === formattedMessage.text?.trim()
+          );
+
+          if (matchIndex !== -1) {
+            const next = [...prev];
+            next[matchIndex] = formattedMessage;
+            return next;
+          }
+        }
+
+        return [...prev, formattedMessage];
+      });
       setIsLoading(false);
     };
 
@@ -166,7 +184,8 @@ const ChatbotWebSocket = () => {
       id: Date.now(),
       text: inputMessage,
       sender: 'user',
-      timestamp: new Date()
+      timestamp: new Date(),
+      optimistic: true
     };
 
     setMessages(prev => [...prev, userMessage]);
@@ -329,6 +348,15 @@ const ChatbotWebSocket = () => {
     return () => window.removeEventListener('openChat', handleOpenChat);
   }, [isOpen]);
 
+  // Broadcast chat open/close so floating UI can avoid overlap.
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent('chatbot:toggle', {
+        detail: { isOpen }
+      })
+    );
+  }, [isOpen]);
+
   return (
     <>
       {/* Chat Toggle Button - Hidden on mobile, shown on desktop */}
@@ -351,19 +379,19 @@ const ChatbotWebSocket = () => {
 
       {/* Chat Window */}
       {isOpen && (
-        <div className={`fixed bottom-20 right-4 md:bottom-6 md:right-6 z-50 transition-all duration-300 ${
+        <div className={`fixed bottom-20 right-4 md:bottom-6 md:right-6 z-[70] transition-all duration-300 ${
           isMinimized ? 'h-16' : 'h-[calc(100vh-120px)] md:h-[600px]'
-        } w-[calc(100vw-2rem)] md:w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden`}>
+        } w-[calc(100vw-2rem)] md:w-80 max-h-[calc(100vh-120px)] bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col`}>
           {/* Header */}
-          <div className="bg-[#D2B48C] text-white p-4 flex items-center justify-between">
-            <div className="flex items-center space-x-2">
+          <div className="bg-[#D2B48C] text-white p-4 flex items-center justify-between gap-3">
+            <div className="flex items-center space-x-2 min-w-0">
               <Bot className="h-5 w-5" />
-              <span className="font-medium">TailoredHands Assistant</span>
+              <span className="font-medium leading-tight text-base md:text-lg truncate">TailoredHands Assistant</span>
               {isConnected && (
                 <div className="h-2 w-2 bg-green-400 rounded-full"></div>
               )}
             </div>
-            <div className="flex items-center space-x-1">
+            <div className="flex items-center space-x-1 flex-shrink-0">
               <Button
                 onClick={toggleMinimize}
                 variant="ghost"
@@ -386,7 +414,7 @@ const ChatbotWebSocket = () => {
           {!isMinimized && (
             <>
               {/* Messages */}
-              <ScrollArea className="flex-1 p-4 h-[calc(100vh-240px)] md:h-[480px]">
+              <ScrollArea className="flex-1 min-h-0 p-4">
                 <div className="space-y-4">
                   {messages.map((message) => (
                     <div

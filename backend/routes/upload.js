@@ -228,9 +228,15 @@ router.get('/', authenticateToken, requireRole(['super_admin', 'admin', 'manager
     // For now, we'll scan the directory
     const fs = require('fs').promises;
     const path = require('path');
+    const appRoot = path.resolve(__dirname, '..', '..');
+    const uploadRoot = process.env.UPLOAD_PATH
+      ? (path.isAbsolute(process.env.UPLOAD_PATH)
+          ? process.env.UPLOAD_PATH
+          : path.resolve(appRoot, process.env.UPLOAD_PATH))
+      : path.join(appRoot, 'uploads');
 
     try {
-      const filesDir = path.join('uploads', 'products', 'original');
+      const filesDir = path.join(uploadRoot, 'products', 'original');
       const files = await fs.readdir(filesDir);
       
       const fileList = [];

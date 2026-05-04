@@ -4,6 +4,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useShop } from '@/context/ShopContext';
 import { useCurrency } from '@/context/CurrencyContext';
 import { customerApi } from '@/lib/services/customerApi';
+import { authApi } from '@/lib/services/authApi';
 import { ordersApi } from '@/lib/services/ordersApi';
 import { createPaymentRecord } from '@/lib/services/payment';
 import { sendPaymentSuccess } from '@/lib/services/notifications';
@@ -37,6 +38,9 @@ export const usePaymentFirst = () => {
   const createOrderAfterPayment = useCallback(async (paymentDetails, customerRecord, userIdToUse, customerIdToUse, formData, cart, sessionId, appliedCoupon, couponDiscountAmount, baseSubtotal, shippingCost, totalAmount) => {
     try {
       const generatedOrderNumber = `TH-${Date.now()}`;
+      const isPickup = (formData.deliveryMethod || 'delivery') === 'pickup';
+      const pickupNotePrefix = isPickup ? 'Delivery Method: Shop Pickup' : null;
+      const notes = [pickupNotePrefix, formData.orderNotes].filter(Boolean).join('\n');
 
       const orderPayload = {
         session_id: sessionId,
@@ -53,14 +57,14 @@ export const usePaymentFirst = () => {
         base_total: parseFloat((baseSubtotal + shippingCost).toFixed(2)),
         shipping_first_name: formData.firstName,
         shipping_last_name: formData.lastName,
-        shipping_address: formData.address,
-        shipping_city: formData.city,
-        shipping_state: formData.state,
-        shipping_country: formData.country,
-        shipping_postal_code: formData.postalCode,
+        shipping_address: isPickup ? "SHOP PICKUP" : formData.address,
+        shipping_city: isPickup ? null : formData.city,
+        shipping_state: isPickup ? null : formData.state,
+        shipping_country: isPickup ? null : formData.country,
+        shipping_postal_code: isPickup ? null : formData.postalCode,
         shipping_phone: formData.phone,
         shipping_email: formData.email,
-        notes: formData.orderNotes, // Changed from order_notes to notes
+        notes,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         payment_reference: paymentDetails.reference,
@@ -255,22 +259,42 @@ export const usePaymentFirst = () => {
       let isNewAuthUser = false;
 
       if (!user) {
+        let newlyRegisteredUser = null;
+        if (createAccount) {
+          const authResponse = await authApi.register({
+            email: formData.email,
+            password,
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            phone: formData.phone,
+          });
+
+          if (!authResponse?.user?.id || !authResponse?.token) {
+            throw new Error("Account creation failed. Please try again.");
+          }
+
+          newlyRegisteredUser = authResponse.user;
+          authApi.setAuthData(authResponse.user, authResponse.token);
+        }
+
         customerRecord = await customerApi.getOrCreateCustomer(
           {
             email: formData.email,
             firstName: formData.firstName,
             lastName: formData.lastName,
             phone: formData.phone,
+            userId: newlyRegisteredUser?.id,
           },
-          createAccount
+          false
         );
         
         if (!customerRecord || !customerRecord.id) {
           throw new Error("Customer creation or retrieval failed.");
         }
         
-        if (createAccount && typeof customerRecord.id === 'string' && customerRecord.id.length === 36) {
+        if (newlyRegisteredUser?.id) {
           isNewAuthUser = true;
+          customerRecord.user_id = newlyRegisteredUser.id;
         }
       } else {
         // Handle authenticated user — look up or create customer by email
@@ -290,7 +314,7 @@ export const usePaymentFirst = () => {
       }
 
       const customerIdToUse = customerRecord.id;
-      const userIdToUse = user?.id || (isNewAuthUser ? customerRecord.id : null);
+      const userIdToUse = user?.id || customerRecord.user_id || (isNewAuthUser ? customerRecord.id : null);
 
       if (!customerIdToUse) {
         throw new Error("Customer ID is missing after creation/retrieval attempts.");

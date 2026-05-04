@@ -1,42 +1,52 @@
 const multer = require('multer');
-const sharp = require('sharp');
+let sharp;
+let sharpLoadError;
+try {
+  sharp = require('sharp');
+} catch (error) {
+  sharpLoadError = error;
+  console.warn('⚠️ Sharp failed to load. Image uploads will be unavailable:', error.message);
+}
 const path = require('path');
 const fs = require('fs').promises;
 const { v4: uuidv4 } = require('uuid');
 
 // Upload root: use UPLOAD_PATH env var (set to Render disk mount point in production)
 // or fall back to the project root for local development
-const projectRoot = process.env.UPLOAD_PATH
-  ? path.resolve(process.env.UPLOAD_PATH)
-  : path.resolve(__dirname, '..', '..');
+const appRoot = path.resolve(__dirname, '..', '..');
+const uploadRoot = process.env.UPLOAD_PATH
+  ? (path.isAbsolute(process.env.UPLOAD_PATH)
+      ? process.env.UPLOAD_PATH
+      : path.resolve(appRoot, process.env.UPLOAD_PATH))
+  : path.join(appRoot, 'uploads');
 
 // Ensure upload directories exist
 const ensureUploadDirs = async () => {
   const dirs = [
-    'uploads',
-    'uploads/products',
-    'uploads/products/original',
-    'uploads/products/thumbnails',
-    'uploads/products/medium',
-    'uploads/newsletter',
-    'uploads/newsletter/original',
-    'uploads/newsletter/thumbnails',
-    'uploads/newsletter/medium',
-    'uploads/hero',
-    'uploads/hero/original',
-    'uploads/hero/thumbnails',
-    'uploads/hero/medium',
-    'uploads/collection',
-    'uploads/collection/original',
-    'uploads/collection/thumbnails',
-    'uploads/collection/medium',
-    'uploads/temp'
+    '.',
+    'products',
+    'products/original',
+    'products/thumbnails',
+    'products/medium',
+    'newsletter',
+    'newsletter/original',
+    'newsletter/thumbnails',
+    'newsletter/medium',
+    'hero',
+    'hero/original',
+    'hero/thumbnails',
+    'hero/medium',
+    'collection',
+    'collection/original',
+    'collection/thumbnails',
+    'collection/medium',
+    'temp'
   ];
 
   for (const dir of dirs) {
     try {
-      // Use absolute path from project root
-      const fullPath = path.join(projectRoot, dir);
+      // Directories are relative to the upload root served by server.js.
+      const fullPath = path.join(uploadRoot, dir);
       await fs.mkdir(fullPath, { recursive: true });
       console.log(`✅ Created/verified directory: ${fullPath}`);
     } catch (error) {
@@ -90,8 +100,13 @@ const upload = multer({
 
 // Image processing function
 const processImage = async (buffer, filename, type = 'product') => {
+  if (!sharp) {
+    throw new Error(`Image processing is unavailable because Sharp failed to load: ${sharpLoadError?.message || 'unknown error'}`);
+  }
+
   const baseFilename = path.parse(filename).name;
   const fileId = uuidv4();
+  const uploadType = type === 'product' ? 'products' : type;
   
   const processedImages = {};
 
@@ -115,8 +130,7 @@ const processImage = async (buffer, filename, type = 'product') => {
     };
 
     for (const [sizeName, config] of Object.entries(sizes)) {
-      // Use absolute path from project root
-      const outputDir = path.join(projectRoot, 'uploads', type, sizeName);
+      const outputDir = path.join(uploadRoot, uploadType, sizeName);
       const outputPath = path.join(outputDir, `${fileId}-${config.suffix}.webp`);
       
       // Ensure the directory exists before writing
@@ -144,7 +158,7 @@ const processImage = async (buffer, filename, type = 'product') => {
       // URL is relative to the web root, not the file system
       processedImages[sizeName] = {
         path: outputPath,
-        url: `/uploads/${type}/${sizeName}/${fileId}-${config.suffix}.webp`,
+        url: `/uploads/${uploadType}/${sizeName}/${fileId}-${config.suffix}.webp`,
         size: sizeName,
         width: config.width,
         height: config.height
@@ -186,10 +200,14 @@ const cleanupTempFiles = async (files) => {
 // Delete uploaded file
 const deleteUploadedFile = async (fileId) => {
   try {
-    const sizes = ['original', 'medium', 'thumbnail'];
-    
-    for (const size of sizes) {
-      const filePath = path.join('uploads', 'products', size, `${fileId}-${size === 'original' ? 'original' : size}.webp`);
+    const sizes = [
+      { dir: 'original', suffix: 'original' },
+      { dir: 'medium', suffix: 'medium' },
+      { dir: 'thumbnails', suffix: 'thumb' }
+    ];
+
+    for (const { dir, suffix } of sizes) {
+      const filePath = path.join(uploadRoot, 'products', dir, `${fileId}-${suffix}.webp`);
       await fs.unlink(filePath).catch(() => {});
     }
     
@@ -203,7 +221,7 @@ const deleteUploadedFile = async (fileId) => {
 // Get file info
 const getFileInfo = async (fileId) => {
   try {
-    const originalPath = path.join('uploads', 'products', 'original', `${fileId}-original.webp`);
+    const originalPath = path.join(uploadRoot, 'products', 'original', `${fileId}-original.webp`);
     const stats = await fs.stat(originalPath);
     
     return {

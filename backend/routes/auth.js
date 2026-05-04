@@ -1,5 +1,5 @@
 const express = require('express');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const { query } = require('../config/database');
@@ -15,6 +15,14 @@ const generateToken = (userId) => {
     JWT_SECRET,
     { expiresIn: '7d' } // Token expires in 7 days
   );
+};
+
+const splitFullName = (name = '') => {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts[0] || '',
+    lastName: parts.slice(1).join(' ') || ''
+  };
 };
 
 // Register new user
@@ -144,8 +152,20 @@ router.post('/login', [
 router.get('/profile', authenticateToken, async (req, res) => {
   try {
     const result = await query(
-      `SELECT id, email, first_name, last_name, full_name, phone, role, email_verified, created_at, updated_at
-       FROM users WHERE id = $1`,
+      `SELECT 
+         u.id,
+         u.email,
+         u.full_name,
+         u.role,
+         u.email_verified,
+         u.created_at,
+         u.updated_at,
+         p.first_name,
+         p.last_name,
+         p.phone
+       FROM users u
+       LEFT JOIN profiles p ON p.user_id = u.id
+       WHERE u.id = $1`,
       [req.user.id]
     );
 
@@ -154,15 +174,17 @@ router.get('/profile', authenticateToken, async (req, res) => {
     }
 
     const user = result.rows[0];
-    // Admins use full_name; customers use first_name/last_name
+    const fallbackName = splitFullName(user.full_name || '');
+    const firstName = user.first_name || fallbackName.firstName;
+    const lastName = user.last_name || fallbackName.lastName;
     const fullName = user.full_name ||
-      [user.first_name, user.last_name].filter(Boolean).join(' ') || '';
+      [firstName, lastName].filter(Boolean).join(' ') || '';
     res.json({
       user: {
         id: user.id,
         email: user.email,
-        firstName: user.first_name,
-        lastName: user.last_name,
+        firstName,
+        lastName,
         fullName,
         phone: user.phone,
         role: user.role,
@@ -192,81 +214,86 @@ router.put('/profile', authenticateToken, [
     }
 
     const { firstName, lastName, fullName, phone } = req.body;
-    const updates = [];
-    const values = [];
-    let paramCount = 0;
 
-    if (fullName !== undefined) {
-      // Admin users — update full_name and derive first/last from it
-      const parts = fullName.trim().split(/\s+/);
-      const first = parts[0] || '';
-      const last = parts.slice(1).join(' ') || '';
-      paramCount++;
-      updates.push(`full_name = $${paramCount}`);
-      values.push(fullName.trim());
-      paramCount++;
-      updates.push(`first_name = $${paramCount}`);
-      values.push(first);
-      paramCount++;
-      updates.push(`last_name = $${paramCount}`);
-      values.push(last);
-    } else {
-      if (firstName !== undefined) {
-        paramCount++;
-        updates.push(`first_name = $${paramCount}`);
-        values.push(firstName);
-      }
-      if (lastName !== undefined) {
-        paramCount++;
-        updates.push(`last_name = $${paramCount}`);
-        values.push(lastName);
-      }
-      if (firstName !== undefined || lastName !== undefined) {
-        // Keep full_name in sync for admin accounts
-        paramCount++;
-        updates.push(`full_name = $${paramCount}`);
-        values.push([firstName, lastName].filter(Boolean).join(' '));
-      }
-    }
-
-    if (phone !== undefined) {
-      paramCount++;
-      updates.push(`phone = $${paramCount}`);
-      values.push(phone);
-    }
-
-    if (updates.length === 0) {
+    if (firstName === undefined && lastName === undefined && fullName === undefined && phone === undefined) {
       return res.status(400).json({ error: 'No fields to update' });
     }
 
-    updates.push(`updated_at = CURRENT_TIMESTAMP`);
-    paramCount++;
-    values.push(req.user.id);
-
-    const result = await query(
-      `UPDATE users SET ${updates.join(', ')}
-       WHERE id = $${paramCount}
-       RETURNING id, email, first_name, last_name, full_name, phone, updated_at`,
-      values
+    const existingResult = await query(
+      `SELECT u.full_name, p.first_name, p.last_name, p.phone
+       FROM users u
+       LEFT JOIN profiles p ON p.user_id = u.id
+       WHERE u.id = $1`,
+      [req.user.id]
     );
 
-    if (result.rows.length === 0) {
+    if (existingResult.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const user = result.rows[0];
+    const existing = existingResult.rows[0];
+    const fallbackName = splitFullName(existing.full_name || '');
+    let nextFirstName = firstName !== undefined
+      ? firstName
+      : (existing.first_name || fallbackName.firstName);
+    let nextLastName = lastName !== undefined
+      ? lastName
+      : (existing.last_name || fallbackName.lastName);
+    let nextFullName = fullName !== undefined
+      ? fullName.trim()
+      : [nextFirstName, nextLastName].filter(Boolean).join(' ');
+
+    if (fullName !== undefined && firstName === undefined && lastName === undefined) {
+      const splitName = splitFullName(nextFullName);
+      nextFirstName = splitName.firstName;
+      nextLastName = splitName.lastName;
+    }
+
+    const nextPhone = phone !== undefined ? phone : existing.phone;
+
+    await query(
+      `UPDATE users
+       SET full_name = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2`,
+      [nextFullName, req.user.id]
+    );
+
+    const result = await query(
+      `INSERT INTO profiles (user_id, first_name, last_name, phone, updated_at)
+       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+       ON CONFLICT (user_id)
+       DO UPDATE SET
+         first_name = EXCLUDED.first_name,
+         last_name = EXCLUDED.last_name,
+         phone = EXCLUDED.phone,
+         updated_at = CURRENT_TIMESTAMP
+       RETURNING first_name, last_name, phone, updated_at`,
+      [req.user.id, nextFirstName || null, nextLastName || null, nextPhone || null]
+    );
+
+    const userResult = await query(
+      `SELECT id, email, full_name FROM users WHERE id = $1`,
+      [req.user.id]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const profile = result.rows[0];
+    const user = userResult.rows[0];
     const resolvedFullName = user.full_name ||
-      [user.first_name, user.last_name].filter(Boolean).join(' ') || '';
+      [profile.first_name, profile.last_name].filter(Boolean).join(' ') || '';
     res.json({
       message: 'Profile updated successfully',
       user: {
         id: user.id,
         email: user.email,
-        firstName: user.first_name,
-        lastName: user.last_name,
+        firstName: profile.first_name,
+        lastName: profile.last_name,
         fullName: resolvedFullName,
-        phone: user.phone,
-        updatedAt: user.updated_at
+        phone: profile.phone,
+        updatedAt: profile.updated_at
       }
     });
 
@@ -321,16 +348,15 @@ router.put('/change-password', authenticateToken, [
 
 // Verify token endpoint
 router.get('/verify', authenticateToken, (req, res) => {
-  res.json({
-    valid: true,
-    user: {
-      id: req.user.id,
-      email: req.user.email,
-      firstName: req.user.first_name,
-      lastName: req.user.last_name,
-      role: req.user.role
-    }
-  });
+    res.json({
+      valid: true,
+      user: {
+        id: req.user.id,
+        email: req.user.email,
+        fullName: req.user.full_name,
+        role: req.user.role
+      }
+    });
 });
 
 // GET /api/auth/google-config - Public endpoint to check if Google auth is enabled
@@ -392,13 +418,24 @@ router.post('/google', async (req, res) => {
         user = { ...byEmail.rows[0], google_id: googleId };
       } else {
         // Create new user from Google account
+        const resolvedFirstName = firstName || email.split('@')[0];
+        const resolvedLastName = lastName || '';
+        const resolvedFullName = [resolvedFirstName, resolvedLastName].filter(Boolean).join(' ');
+        const googlePasswordHash = await bcrypt.hash(`google:${googleId}`, 12);
         const result = await query(
-          `INSERT INTO users (email, google_id, first_name, last_name, email_verified, is_active)
+          `INSERT INTO users (email, google_id, full_name, password_hash, email_verified, is_active)
            VALUES ($1, $2, $3, $4, true, true)
            RETURNING *`,
-          [email, googleId, firstName || email.split('@')[0], lastName || '']
+          [email, googleId, resolvedFullName, googlePasswordHash]
         );
         user = result.rows[0];
+
+        await query(
+          `INSERT INTO profiles (user_id, first_name, last_name)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (user_id) DO NOTHING`,
+          [user.id, resolvedFirstName, resolvedLastName]
+        );
       }
     }
 
@@ -413,8 +450,9 @@ router.post('/google', async (req, res) => {
       user: {
         id: user.id,
         email: user.email,
-        firstName: user.first_name,
-        lastName: user.last_name,
+        firstName: firstName || splitFullName(user.full_name || '').firstName,
+        lastName: lastName || splitFullName(user.full_name || '').lastName,
+        fullName: user.full_name,
         role: user.role,
       },
       token,

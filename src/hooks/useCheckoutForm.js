@@ -107,11 +107,14 @@ export const useCheckoutForm = () => {
 
   // Ensure all values are valid numbers to prevent NaN issues
   const baseSubtotal = typeof cartTotal === 'number' && !isNaN(cartTotal) ? cartTotal : 0;
+  const isPickup = (formData.deliveryMethod || 'delivery') === 'pickup';
   // Use the live DHL rate the customer selected; fall back to manual rule cost
   const selectedShippingCost = selectedShipping != null
     ? parseFloat(selectedShipping.cost ?? selectedShipping.amount ?? 0)
     : null;
-  const shippingCost = selectedShippingCost !== null
+  const shippingCost = isPickup
+    ? 0
+    : selectedShippingCost !== null
     ? selectedShippingCost
     : (typeof calculatedShippingCost === 'number' && !isNaN(calculatedShippingCost) ? calculatedShippingCost : 0);
   const discountAmount = typeof couponDiscount === 'number' && !isNaN(couponDiscount) ? couponDiscount : 0;

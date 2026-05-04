@@ -67,6 +67,18 @@ const DesktopNavLinks = () => {
       >
         About
       </Link>
+
+      <Link
+        to="/faqs"
+        className={cn(
+          "transition-colors tracking-wide",
+          isActive('/faqs')
+            ? "text-[#D2B48C] font-medium"
+            : "hover:text-[#D2B48C]"
+        )}
+      >
+        FAQ
+      </Link>
       
       <Link 
         to="/contact" 

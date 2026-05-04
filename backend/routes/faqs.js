@@ -67,6 +67,33 @@ router.get('/general', async (req, res) => {
   }
 });
 
+// GET /api/faqs/public - Get all FAQs for public FAQ page
+router.get('/public', async (req, res) => {
+  try {
+    const result = await query(
+      `SELECT
+        pf.*,
+        p.name as product_name
+      FROM product_faqs pf
+      LEFT JOIN products p ON pf.product_id = p.id
+      ORDER BY
+        CASE WHEN pf.product_id IS NULL THEN 0 ELSE 1 END,
+        p.name ASC NULLS FIRST,
+        pf.created_at ASC`
+    );
+
+    const faqs = result.rows.map((faq) => ({
+      ...faq,
+      products: faq.product_id ? { id: faq.product_id, name: faq.product_name } : null
+    }));
+
+    res.json(faqs);
+  } catch (error) {
+    console.error('Error fetching public FAQs:', error);
+    res.status(500).json({ error: 'Failed to fetch public FAQs', details: error.message });
+  }
+});
+
 // POST /api/faqs - Create FAQ (Admin only)
 router.post('/', authenticateToken, [
   body('question').trim().notEmpty().withMessage('Question is required'),

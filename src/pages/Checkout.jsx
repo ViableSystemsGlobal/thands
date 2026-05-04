@@ -129,6 +129,7 @@ const CheckoutFormGrid = ({
             appliedCoupon={appliedCoupon}
             couponDiscount={couponDiscount}
             selectedShipping={selectedShipping}
+            deliveryMethod={formData.deliveryMethod}
             couponLoading={couponLoading}
             showSubmitButton={true}
             submitButtonText="Continue to Order Verification"
@@ -307,6 +308,7 @@ const CheckoutPage = () => {
                       appliedCoupon={appliedCoupon}
                       couponDiscount={couponDiscount}
                       selectedShipping={selectedShipping}
+                      deliveryMethod={formData.deliveryMethod}
                       couponLoading={couponLoading}
                       showSubmitButton={true}
                       submitButtonText="Confirm & Proceed to Payment"

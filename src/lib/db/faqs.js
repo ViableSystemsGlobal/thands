@@ -21,6 +21,16 @@ export const fetchGeneralFAQs = async () => {
   }
 };
 
+export const fetchAllPublicFAQs = async () => {
+  try {
+    const data = await api.get('/faqs/public');
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error fetching all public FAQs:', error.message);
+    return { data: null, error };
+  }
+};
+
 export const fetchAllFAQsForAdmin = async () => {
   try {
     const response = await adminApiClient.get('/faqs');

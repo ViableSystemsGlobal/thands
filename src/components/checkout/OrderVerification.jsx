@@ -64,12 +64,21 @@ const OrderVerification = ({
             </div>
             <div className="border-t border-gray-200 my-3"></div>
             <div className="space-y-1">
-              <p className="font-medium text-gray-900">Delivery Address:</p>
-              <p className="text-gray-700">{formData.address}</p>
-              <p className="text-gray-700">
-                {formData.city}, {formData.state} {formData.postalCode}
-              </p>
-              <p className="text-gray-700">{formData.country}</p>
+              {(formData.deliveryMethod || 'delivery') === 'pickup' ? (
+                <>
+                  <p className="font-medium text-gray-900">Delivery Method:</p>
+                  <p className="text-gray-700">Pick Up From Shop</p>
+                </>
+              ) : (
+                <>
+                  <p className="font-medium text-gray-900">Delivery Address:</p>
+                  <p className="text-gray-700">{formData.address}</p>
+                  <p className="text-gray-700">
+                    {formData.city}, {formData.state} {formData.postalCode}
+                  </p>
+                  <p className="text-gray-700">{formData.country}</p>
+                </>
+              )}
             </div>
             {shippingRule && (
               <div className="mt-3 p-3 bg-blue-50 rounded-lg">
