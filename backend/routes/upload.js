@@ -228,12 +228,10 @@ router.get('/', authenticateToken, requireRole(['super_admin', 'admin', 'manager
     // For now, we'll scan the directory
     const fs = require('fs').promises;
     const path = require('path');
+    // Must match the upload root in middleware/upload.js and the directory
+    // served by server.js (path.join(projectRoot, 'uploads')).
     const appRoot = path.resolve(__dirname, '..', '..');
-    const uploadRoot = process.env.UPLOAD_PATH
-      ? (path.isAbsolute(process.env.UPLOAD_PATH)
-          ? process.env.UPLOAD_PATH
-          : path.resolve(appRoot, process.env.UPLOAD_PATH))
-      : path.join(appRoot, 'uploads');
+    const uploadRoot = path.join(appRoot, 'uploads');
 
     try {
       const filesDir = path.join(uploadRoot, 'products', 'original');

@@ -15,10 +15,12 @@ const optimizeImageResponse = async (req, res, next) => {
       return next();
     }
 
-    // Extract filename from path
+    // Extract filename from path, stripping any existing size suffix
+    // (e.g. "<id>-original.webp" -> "<id>") so we don't build a doubled
+    // name like "<id>-original-medium.webp".
     const filename = path.basename(imagePath);
-    const baseName = path.parse(filename).name;
-    
+    const baseName = path.parse(filename).name.replace(/-(original|medium|thumb|thumbnail)$/i, '');
+
     // Define size preferences based on query parameter
     let preferredSize = 'medium';
     if (size === 'thumb' || size === 'thumbnail') {

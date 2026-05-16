@@ -11,14 +11,15 @@ const path = require('path');
 const fs = require('fs').promises;
 const { v4: uuidv4 } = require('uuid');
 
-// Upload root: use UPLOAD_PATH env var (set to Render disk mount point in production)
-// or fall back to the project root for local development
+// Upload root MUST match the directory server.js serves at /uploads and
+// /api/images. server.js serves path.join(projectRoot, 'uploads'), and on
+// Render the persistent disk is mounted at that same path. We derive it the
+// same way here so image writes and reads always agree.
+// (Do NOT reintroduce a UPLOAD_PATH override: a value of
+// '/opt/render/project/src' made uploads write to '<root>/products' while the
+// server served '<root>/uploads/products', so every uploaded image 404'd.)
 const appRoot = path.resolve(__dirname, '..', '..');
-const uploadRoot = process.env.UPLOAD_PATH
-  ? (path.isAbsolute(process.env.UPLOAD_PATH)
-      ? process.env.UPLOAD_PATH
-      : path.resolve(appRoot, process.env.UPLOAD_PATH))
-  : path.join(appRoot, 'uploads');
+const uploadRoot = path.join(appRoot, 'uploads');
 
 // Ensure upload directories exist
 const ensureUploadDirs = async () => {

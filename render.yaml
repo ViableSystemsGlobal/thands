@@ -34,8 +34,10 @@ services:
         value: 900000
       - key: RATE_LIMIT_MAX_REQUESTS
         value: 100
-      - key: UPLOAD_PATH
-        value: /opt/render/project/src
+      # NOTE: no UPLOAD_PATH — the app derives the upload directory from the
+      # project root so it always matches the static serve path and the disk
+      # mount below (/opt/render/project/src/uploads). Setting UPLOAD_PATH here
+      # caused uploaded images to be written outside the served directory.
       # DHL — production endpoint + credentials set in Render dashboard
       - key: MYDHL_BASE_URL
         value: https://express.api.dhl.com/mydhlapi
